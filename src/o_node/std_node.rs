@@ -1,6 +1,6 @@
 use std::net::{UdpSocket, IpAddr};
 
-use crate::o_node::NodeCreationError;
+use crate::o_node::{NodeCreationError, message::{query::{Query, QueryType}, answer::Answer, Message}};
 
 use super::{Node, config::{Configuration, NodeFunction}};
 
@@ -11,7 +11,18 @@ pub struct StdNode {
     neighbours: Vec<IpAddr>,
 }
 
+impl StdNode {
+    pub fn new(socket: UdpSocket, port: u16, neighbours: &[IpAddr]) -> Self {
+        Self {
+            socket,
+            port,
+            neighbours: neighbours.to_owned(),
+        }
+    }
+}
+
 impl Node for StdNode {
+
     fn from_configuration(configuration: Configuration) -> Result<Self, NodeCreationError>
     where
         Self: Sized,
@@ -24,8 +35,11 @@ impl Node for StdNode {
                 configuration.port
             );
 
+            let query = Query::new(QueryType::Neighbours, None);
+            dbg!(&query);
+
             socket
-                .send_to(b"Neighboors", bootstraper_ip)
+                .send_to(&bincode::serialize(&query).unwrap(), bootstraper_ip)
                 .map_err(|err| NodeCreationError::ErrorBindingSocket(err))?;
 
             let mut buffer = [0; 1024];
@@ -33,14 +47,16 @@ impl Node for StdNode {
                 .recv(&mut buffer)
                 .map_err(|err| NodeCreationError::ErrorConnectingBootstraper(err))?;
 
-            let neighbours = bincode::deserialize(&buffer)
+            let answer: Answer<Vec<IpAddr>> = bincode::deserialize(&buffer)
                 .map_err(|err| NodeCreationError::ErrorDeserializingIpAddresses(err))?;
 
-            Ok(StdNode {
-                socket: socket,
-                port: configuration.port,
+            let neighbours = answer.payload().expect("Expected a payload");
+
+            Ok(StdNode::new(
+                socket,
+                configuration.port,
                 neighbours,
-            })
+            ))
         } else {
             panic!("Expected a non bootstraper node configuration");
         }

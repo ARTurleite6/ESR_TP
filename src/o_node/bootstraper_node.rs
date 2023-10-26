@@ -1,11 +1,11 @@
 use std::{
     collections::HashMap,
     fs::File,
-    io::{BufReader, Read},
+    io::BufReader,
     net::{IpAddr, UdpSocket},
 };
 
-use crate::o_node::message::{Message, Status};
+use crate::o_node::message::{answer::Answer, query::Query, Message, Status};
 
 use super::{
     config::{Configuration, NodeFunction},
@@ -76,13 +76,13 @@ impl Node for BootstraperNode {
                         .recv_from(&mut buffer)
                         .expect("Error receiving from bootstraping socket");
 
-                    let message: Message =
+                    let message: Query =
                         bincode::deserialize(&buffer).expect("Error deserializing message");
                     dbg!(&message);
 
                     if let Some(neighbours) = self.topology.get(&addr.ip()) {
-                        let asnwer = Message::answer(message.id(), "Your neighboors are".to_string(), Status::Ok);
-                        socket.send_to(b"Neighbours not found for your address", addr)
+                        let answer = Answer::from_message(message.id(), Status::Ok, neighbours);
+                        socket.send_to(&bincode::serialize(&answer).unwrap(), addr).expect("Error answering node");
                     } else {
                     }
                 }
