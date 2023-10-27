@@ -5,7 +5,7 @@ use std::{
     net::{IpAddr, UdpSocket},
 };
 
-use crate::o_node::message::{answer::Answer, query::Query, Message, Status};
+use crate::o_node::message::{answer::Answer, query::Query, Status};
 
 use super::{
     config::{Configuration, NodeFunction},
@@ -81,7 +81,7 @@ impl Node for BootstraperNode {
                     dbg!(&message);
 
                     if let Some(neighbours) = self.topology.get(&addr.ip()) {
-                        let answer = Answer::from_message(message.id(), Status::Ok, neighbours);
+                        let answer = Answer::from_message(message, neighbours, Status::Ok);
                         socket.send_to(&bincode::serialize(&answer).unwrap(), addr).expect("Error answering node");
                     } else {
                     }

@@ -1,4 +1,4 @@
-use super::{Status, Message};
+use super::{Status, Message, query::Query};
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,12 +18,12 @@ impl<T: Clone + std::fmt::Debug + Serialize + for <'de> Deserialize<'de>> Messag
     }
 }
 
-impl<T: Clone + std::fmt::Debug> Answer<T> {
-    pub fn from_message(id: u32, status: Status, payload: T) -> Self {
+impl<T> Answer<T> {
+    pub fn from_message(message: Query, payload: T, status: Status) -> Self {
         Self {
-            id,
+            id: message.id(),
             status,
-            payload,
+            payload
         }
     }
 }
