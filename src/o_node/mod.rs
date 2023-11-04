@@ -35,5 +35,5 @@ pub trait Node: Debug {
     fn from_configuration(configuration: Configuration) -> Result<Self, NodeCreationError>
     where
         Self: Sized;
-    fn run(&self);
+    fn run(&self) -> Result<(), NodeCreationError>;
 }
