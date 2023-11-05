@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 pub mod query;
 pub mod answer;
 
+pub mod rtsp;
+
 pub trait Message<T>: std::fmt::Debug + Clone + Serialize + for<'de> Deserialize<'de> {
     fn id(&self) -> u32;
     fn payload(&self) -> Option<&T>;

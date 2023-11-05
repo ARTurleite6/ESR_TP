@@ -1,20 +1,16 @@
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, path::Path};
 
+#[derive(Debug)]
 pub struct VideoStream {
-    file_name: String,
     file: File,
     frame_num: u32,
 }
 
 impl VideoStream {
-    pub fn new(file_name: String) -> Self {
-        let file = File::open(&file_name).expect("Error opening file");
+    pub fn new<P: AsRef<Path>>(file_name: P) -> Self {
+        let file = File::open(file_name).expect("Error opening file");
 
-        Self {
-            file_name,
-            file,
-            frame_num: 0,
-        }
+        Self { file, frame_num: 0 }
     }
 
     pub fn next_frame(&mut self) -> Vec<u8> {

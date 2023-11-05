@@ -3,7 +3,7 @@
 pub mod config;
 pub mod bootstraper_node;
 pub mod std_node;
-mod message;
+pub mod message;
 
 use std::fmt::Debug;
 

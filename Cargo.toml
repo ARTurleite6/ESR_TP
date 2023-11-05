@@ -9,6 +9,14 @@ edition = "2021"
 name = "node"
 path = "src/node.rs"
 
+[[bin]]
+name = "server"
+path = "src/server_launcher.rs"
+
+[[bin]]
+name = "client"
+path = "src/client_launcher.rs"
+
 [lib]
 name = "esr_lib"
 path = "src/lib.rs"
@@ -17,6 +25,8 @@ path = "src/lib.rs"
 [dependencies]
 bincode = "1.3.3"
 clap = { version = "4.4.6", features = ["derive"] }
+gio = "0.18.3"
+gtk = "0.18.1"
 rand = "0.8.5"
 rtp = "0.9.0"
 serde = { version = "1.0.189", features = ["derive"] }
