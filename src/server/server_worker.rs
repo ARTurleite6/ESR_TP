@@ -1,17 +1,57 @@
 use std::{
     io::{Read, Write},
     net::{IpAddr, TcpStream, UdpSocket},
-    str::FromStr, sync::{Arc, atomic::AtomicBool},
+    sync::{atomic::AtomicBool, Arc, Mutex},
+    time::Duration,
 };
 
 use rand::Rng;
+use rtp_rs::{RtpPacketBuilder, Seq};
 
 use crate::{
     o_node::message::rtsp::{RequestType, RtspRequest, RtspResponse, Status},
     video::video_stream::VideoStream,
 };
 
-use super::Server;
+struct TransmissionWorker;
+
+impl TransmissionWorker {
+    fn run(
+        video_stream: Arc<Mutex<VideoStream>>,
+        rtp_socket: Arc<UdpSocket>,
+        stop_transmiting: Arc<AtomicBool>,
+        client_address: (IpAddr, u16),
+    ) {
+        loop {
+            std::thread::sleep(Duration::from_millis(5));
+
+            if stop_transmiting.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+
+            let mut lock_guard = video_stream.lock().unwrap();
+
+            let data = lock_guard.next_frame();
+
+            if let Ok(data) = data {
+                let frame_number = lock_guard.frame_num();
+
+                let packet = RtpPacketBuilder::new()
+                    .sequence(Seq::from(frame_number as u16))
+                    .payload_type(96)
+                    .payload(&data)
+                    .build()
+                    .unwrap();
+
+                dbg!(&packet);
+
+                rtp_socket
+                    .send_to(&packet, client_address)
+                    .expect("Error sending data");
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ServerState {
@@ -32,15 +72,19 @@ pub struct ServerWorker {
 struct ClientInfo {
     ip_address: IpAddr,
     rtp_port: u16,
-    video_stream: VideoStream,
+    video_stream: Arc<Mutex<VideoStream>>,
     session_id: u32,
-    socket_rtp: Option<UdpSocket>,
+    socket_rtp: Option<Arc<UdpSocket>>,
 }
 
 impl ClientInfo {
     fn open_connection(&mut self) {
-        let socket_rtp = UdpSocket::bind("127.0.0.1:0").expect("Error binding socket");
+        let socket_rtp = Arc::new(UdpSocket::bind("127.0.0.1:0").expect("Error binding socket"));
         self.socket_rtp = Some(socket_rtp);
+    }
+
+    fn close_connection(&mut self) {
+        self.socket_rtp = None;
     }
 }
 
@@ -50,7 +94,7 @@ impl ServerWorker {
             rtsp_socket,
             server_state: ServerState::Init,
             client_info: None,
-            stop_transmission: Arc::new(AtomicBool::new(true)),
+            stop_transmission: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -60,7 +104,8 @@ impl ServerWorker {
                 if let ServerState::Init = self.server_state {
                     println!("Processing setup");
 
-                    let video_stream = VideoStream::new(request.file_request());
+                    let video_stream =
+                        Arc::new(Mutex::new(VideoStream::new(request.file_request())));
 
                     let mut rng = rand::thread_rng();
 
@@ -85,7 +130,36 @@ impl ServerWorker {
             RequestType::Play => {
                 if let ServerState::Ready = self.server_state {
                     println!("Processing play");
-                    self.client_info.as_mut().unwrap().open_connection();
+                    let client_info = self.client_info.as_mut().unwrap();
+                    client_info.open_connection();
+
+                    self.server_state = ServerState::Playing;
+
+                    let socket_clone = Arc::clone(
+                        &client_info
+                            .socket_rtp
+                            .as_ref()
+                            .expect("Expected socket connection"),
+                    );
+
+                    let stop_transmiting_clone = Arc::clone(&self.stop_transmission);
+
+                    let video_stream_clone = Arc::clone(&client_info.video_stream);
+                    let ip_address = client_info.ip_address;
+                    let rtp_port = client_info.rtp_port;
+                    std::thread::spawn(move || {
+                        TransmissionWorker::run(
+                            video_stream_clone,
+                            socket_clone,
+                            stop_transmiting_clone,
+                            (ip_address, rtp_port),
+                        );
+                    });
+
+                    let response =
+                        RtspResponse::new(Status::Ok, request.seq_number(), client_info.session_id);
+
+                    self.reply_rtsp(response);
                 }
             }
             _ => {

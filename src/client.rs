@@ -151,6 +151,42 @@ impl Client {
         dbg!(&response);
     }
 
+    fn play(&mut self) {
+        let server_connection = self.server_connection.as_mut().unwrap();
+
+        let request = RtspRequest::new(
+            message::rtsp::RequestType::Play,
+            self.video_file.clone(),
+            0,
+            self.rtp_port,
+        );
+
+        let request = bincode::serialize(&request).expect("Error serializing packet");
+
+        let tcp_socket = &mut server_connection.server_socket;
+
+        tcp_socket.write_all(&request).unwrap();
+
+        let mut buffer = [0; 1024];
+
+        tcp_socket.read(&mut buffer).unwrap();
+
+        let answer: RtspResponse = bincode::deserialize(&buffer).expect("Error deserializing packet");
+
+        dbg!(&answer);
+
+        loop {
+            let mut buffer = [0; 1024];
+
+            server_connection
+                .udp_socket
+                .recv(&mut buffer)
+                .expect("Error receiving packet");
+
+            dbg!(&buffer);
+        }
+    }
+
     fn send_rtps_packet(&mut self, packet: RtspRequest) {
         self.server_connection
             .as_mut()
@@ -199,6 +235,10 @@ impl VideoPlayer {
                 widgets.label.set_text("State: Ready");
                 client.borrow_mut().setup();
             }
+            Message::Play => {
+                widgets.label.set_text("State: Playing");
+                client.borrow_mut().play();
+            }
             _ => todo!(),
         }
     }
@@ -208,6 +248,13 @@ impl VideoPlayer {
         let widgets_clone = Rc::clone(&widgets);
         widgets.setup_button.connect_clicked(move |_| {
             let message = Message::Setup;
+            Self::update(message, &client_clone, &widgets_clone);
+        });
+
+        let client_clone = Rc::clone(&client);
+        let widgets_clone = Rc::clone(&widgets);
+        widgets.play_button.connect_clicked(move |_| {
+            let message = Message::Play;
             Self::update(message, &client_clone, &widgets_clone);
         });
     }

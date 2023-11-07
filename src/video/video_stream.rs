@@ -13,9 +13,9 @@ impl VideoStream {
         Self { file, frame_num: 0 }
     }
 
-    pub fn next_frame(&mut self) -> Vec<u8> {
+    pub fn next_frame(&mut self) -> std::io::Result<Vec<u8>> {
         let mut buffer = [0; 5];
-        self.file.read_exact(&mut buffer).unwrap();
+        self.file.read_exact(&mut buffer)?;
 
         let buffer = String::from_utf8_lossy(&buffer);
 
@@ -23,11 +23,11 @@ impl VideoStream {
 
         let mut buffer = vec![0; frame_length];
 
-        self.file.read_exact(&mut buffer).unwrap();
+        self.file.read_exact(&mut buffer)?;
 
         self.frame_num += 1;
 
-        return buffer;
+        return Ok(buffer);
     }
 
     pub fn frame_num(&self) -> u32 {
