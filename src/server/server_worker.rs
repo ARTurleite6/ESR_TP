@@ -1,7 +1,7 @@
 use std::{
     io::{Read, Write},
-    net::TcpStream,
-    str::FromStr,
+    net::{IpAddr, TcpStream, UdpSocket},
+    str::FromStr, sync::{Arc, atomic::AtomicBool},
 };
 
 use rand::Rng;
@@ -10,6 +10,8 @@ use crate::{
     o_node::message::rtsp::{RequestType, RtspRequest, RtspResponse, Status},
     video::video_stream::VideoStream,
 };
+
+use super::Server;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ServerState {
@@ -23,13 +25,23 @@ pub struct ServerWorker {
     rtsp_socket: TcpStream,
     server_state: ServerState,
     client_info: Option<ClientInfo>,
+    stop_transmission: Arc<AtomicBool>,
 }
 
 #[derive(Debug)]
 struct ClientInfo {
+    ip_address: IpAddr,
     rtp_port: u16,
     video_stream: VideoStream,
     session_id: u32,
+    socket_rtp: Option<UdpSocket>,
+}
+
+impl ClientInfo {
+    fn open_connection(&mut self) {
+        let socket_rtp = UdpSocket::bind("127.0.0.1:0").expect("Error binding socket");
+        self.socket_rtp = Some(socket_rtp);
+    }
 }
 
 impl ServerWorker {
@@ -38,6 +50,7 @@ impl ServerWorker {
             rtsp_socket,
             server_state: ServerState::Init,
             client_info: None,
+            stop_transmission: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -54,9 +67,11 @@ impl ServerWorker {
                     let session_id = rng.gen_range(100000..999999);
 
                     self.client_info = Some(ClientInfo {
+                        ip_address: self.rtsp_socket.peer_addr().unwrap().ip(),
                         rtp_port: request.port_rtp(),
                         video_stream,
                         session_id,
+                        socket_rtp: None,
                     });
                     dbg!(&self.client_info);
 
@@ -67,6 +82,12 @@ impl ServerWorker {
                     self.reply_rtsp(response);
                 }
             }
+            RequestType::Play => {
+                if let ServerState::Ready = self.server_state {
+                    println!("Processing play");
+                    self.client_info.as_mut().unwrap().open_connection();
+                }
+            }
             _ => {
                 todo!()
             }
@@ -74,11 +95,11 @@ impl ServerWorker {
     }
 
     pub fn reply_rtsp(&mut self, response: RtspResponse) {
-        let response: String = response.to_string();
+        let response = bincode::serialize(&response).expect("Error serializing packet");
 
         dbg!(&response);
 
-        self.rtsp_socket.write_all(response.as_bytes()).unwrap();
+        self.rtsp_socket.write_all(&response).unwrap();
     }
 
     pub fn run(&mut self) {
@@ -90,9 +111,7 @@ impl ServerWorker {
             }
             dbg!(&buffer);
 
-            let buffer = String::from_utf8_lossy(&buffer[..n]);
-
-            let request = RtspRequest::from_str(&buffer).unwrap();
+            let request = bincode::deserialize(&buffer).expect("Error deserializing packet");
 
             self.process_rtsp_request(request);
         }

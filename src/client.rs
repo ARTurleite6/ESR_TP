@@ -1,94 +1,232 @@
-use gio::prelude::*;
-use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Button, Image, Label, Orientation};
+#![allow(dead_code)]
+
+use std::cell::RefCell;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, UdpSocket};
 use std::rc::Rc;
 
-use crate::o_node::message::rtsp::{RequestType, RtspRequest};
+use clap::Parser;
+use gtk::prelude::*;
+use gtk::{Application, ApplicationWindow};
+use rand::Rng;
 
+use crate::o_node::message;
+use crate::o_node::message::rtsp::{RtspRequest, RtspResponse};
+
+#[derive(Debug, Parser)]
+pub struct Args {
+    #[clap(short = 's', long, default_value = "localhost")]
+    server_name: String,
+    #[clap(short = 'p', long, default_value = "8554")]
+    server_port: u16,
+    #[clap(short, long, default_value = "5000")]
+    rtp_port: u16,
+    #[clap(short, long, default_value = "movie.Mjpeg")]
+    video_file: String,
+}
+
+pub struct VideoPlayer;
+
+trait VideoPlayerComponent {
+    type Init;
+
+    fn from_init(init: &Self::Init) -> Self;
+}
+
+struct VideoWidgets {
+    play_button: gtk::Button,
+    setup_button: gtk::Button,
+    pause_button: gtk::Button,
+    teardown_button: gtk::Button,
+    label: gtk::Label,
+}
+
+impl VideoWidgets {
+    pub fn new(window: &ApplicationWindow) -> Self {
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        let video = gtk::Video::new();
+        video.set_vexpand(true);
+        video.set_autoplay(true);
+        vbox.append(&video);
+
+        let label = gtk::Label::new(Some("State: Idle"));
+
+        let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+
+        let play_button = gtk::Button::with_label("Play");
+        hbox.append(&play_button);
+
+        let setup_button = gtk::Button::with_label("Setup");
+        hbox.append(&setup_button);
+
+        let pause_button = gtk::Button::with_label("Pause");
+        hbox.append(&pause_button);
+
+        let teardown_button = gtk::Button::with_label("Teardown");
+        hbox.append(&teardown_button);
+
+        vbox.append(&hbox);
+        vbox.append(&label);
+
+        window.set_child(Some(&vbox));
+
+        Self {
+            play_button,
+            setup_button,
+            pause_button,
+            teardown_button,
+            label,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ServerConnection {
+    server_socket: TcpStream,
+    udp_socket: UdpSocket,
+}
+
+#[derive(Debug, Default)]
 pub struct Client {
     server_name: String,
     server_port: u16,
     rtp_port: u16,
     video_file: String,
+    server_connection: Option<ServerConnection>,
+}
+
+impl VideoPlayerComponent for Client {
+    type Init = Args;
+
+    fn from_init(init: &Self::Init) -> Self {
+        Self::new(
+            init.server_name.clone(),
+            init.server_port,
+            init.rtp_port,
+            init.video_file.clone(),
+        )
+    }
 }
 
 impl Client {
-    pub fn new(server_name: String, server_port: u16, rtp_port: u16, video_file: String) -> Self {
+    fn new(server_name: String, server_port: u16, rtp_port: u16, video_file: String) -> Self {
         Self {
             server_name,
             server_port,
             rtp_port,
             video_file,
+            ..Default::default()
         }
     }
 
-    pub fn build_ui(&self, application: &Application) {
-        // Create the main window
-        let window = ApplicationWindow::new(application);
-        window.set_title("Video Player");
-        window.set_default_size(800, 600);
+    fn setup(&mut self) {
+        let mut rng = rand::thread_rng();
 
-        // Create a vertical box to hold the widgets
-        let vbox = gtk::Box::new(Orientation::Vertical, 5);
-        window.add(&vbox);
+        let seq_number = rng.gen();
 
-        // Create an Image widget to display the video
-        let video_image = Image::new();
-        vbox.pack_start(&video_image, true, true, 0);
+        let message = RtspRequest::new(
+            message::rtsp::RequestType::Setup,
+            self.video_file.clone(),
+            seq_number,
+            self.rtp_port,
+        );
 
-        // Create buttons for Play, Pause, Setup, and Teardown
-        let button_play = Button::with_label("Play");
-        let button_pause = Button::with_label("Pause");
-        let button_setup = Button::with_label("Setup");
-        let button_teardown = Button::with_label("Teardown");
+        dbg!(&message);
 
-        // Create labels to display messages
-        let label_status = Rc::new(Label::new(Some("Status: Stopped")));
+        let udp_socket =
+            UdpSocket::bind(("127.0.0.1", self.rtp_port)).expect("Error binding rtp socket");
 
-        // Pack buttons and labels into a horizontal box
-        let hbox = gtk::Box::new(Orientation::Horizontal, 5);
-        hbox.pack_start(&button_play, false, false, 0);
-        hbox.pack_start(&button_pause, false, false, 0);
-        hbox.pack_start(&button_setup, false, false, 0);
-        hbox.pack_start(&button_teardown, false, false, 0);
+        let server_socket = TcpStream::connect((self.server_name.as_str(), self.server_port))
+            .expect("Error connecting to server");
 
-        // Add buttons and labels to the vertical box
-        vbox.pack_start(&hbox, false, false, 0);
-        vbox.pack_start(&*label_status, false, false, 0);
-
-        let label_status_clone = Rc::clone(&label_status);
-        // Connect button signals
-        button_play.connect_clicked(move |_| {
-            //label_status.set_text("Status: Playing");
-            label_status_clone.set_text("Status: Playing");
-            // Add code to play the video here
+        self.server_connection = Some(ServerConnection {
+            server_socket,
+            udp_socket,
         });
 
-        let label_status_clone = Rc::clone(&label_status);
-        button_pause.connect_clicked(move |_| {
-            label_status_clone.set_text("Status: Paused");
-            // Add code to pause the video here
-        });
+        self.send_rtps_packet(message);
 
-        let label_status_clone = Rc::clone(&label_status);
-        let server_name = self.server_name.clone();
-        let server_port = self.server_port;
-        let file_name = self.video_file.clone();
-        button_setup.connect_clicked(move |_| {
-            println!("Stup");
-            label_status_clone.set_text("Status: Setup");
-        });
+        let response = self.receive_rtps_packet();
+        dbg!(&response);
+    }
 
-        let label_status_clone = Rc::clone(&label_status);
-        button_teardown.connect_clicked(move |_| {
-            label_status_clone.set_text("Status: Teardown");
-            // Add code to teardown the video here
-        });
+    fn send_rtps_packet(&mut self, packet: RtspRequest) {
+        self.server_connection
+            .as_mut()
+            .unwrap()
+            .server_socket
+            .write_all(&bincode::serialize(&packet).expect("Error serializing packet"))
+            .expect("Error sending packet to server");
+    }
 
-        // Show all widgets
-        window.show_all();
-        window.set_application(Some(application))
+    fn receive_rtps_packet(&mut self) -> RtspResponse {
+        let mut buffer = [0; 1024];
+
+        self.server_connection
+            .as_mut()
+            .unwrap()
+            .server_socket
+            .read(&mut buffer)
+            .expect("Error receiving packet from server");
+
+        return bincode::deserialize(&buffer).expect("Error deserializing packet");
+    }
+}
+
+#[derive(Debug)]
+enum Message {
+    Play,
+    Pause,
+    Setup,
+    Teardown,
+}
+
+impl VideoPlayer {
+    pub fn run(init: Args) {
+        let app = Application::builder()
+            .application_id("video.streamer")
+            .build();
+
+        Self::setup(&app, init);
+
+        app.run_with_args::<&str>(&[]);
+    }
+
+    fn update(message: Message, client: &Rc<RefCell<Client>>, widgets: &Rc<VideoWidgets>) {
+        match message {
+            Message::Setup => {
+                widgets.label.set_text("State: Ready");
+                client.borrow_mut().setup();
+            }
+            _ => todo!(),
+        }
+    }
+
+    fn register_callbacks(client: Rc<RefCell<Client>>, widgets: Rc<VideoWidgets>) {
+        let client_clone = Rc::clone(&client);
+        let widgets_clone = Rc::clone(&widgets);
+        widgets.setup_button.connect_clicked(move |_| {
+            let message = Message::Setup;
+            Self::update(message, &client_clone, &widgets_clone);
+        });
+    }
+
+    fn setup(app: &Application, init: Args) {
+        app.connect_activate(move |app| {
+            let window = ApplicationWindow::builder()
+                .application(app)
+                .title("Video Streamer")
+                .default_width(800)
+                .default_height(600)
+                .build();
+
+            let widgets = Rc::new(VideoWidgets::new(&window));
+            let client = Rc::new(RefCell::new(Client::from_init(&init)));
+
+            Self::register_callbacks(client, widgets);
+
+            window.present();
+        });
     }
 }

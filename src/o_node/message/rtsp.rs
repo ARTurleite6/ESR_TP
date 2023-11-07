@@ -12,7 +12,7 @@ pub enum RtpParsingError {
     InvalidRequestType(String),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum RequestType {
     Setup,
     Play,
@@ -89,7 +89,7 @@ impl fmt::Display for RtspResponse {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RtspRequest {
     request_type: RequestType,
     file_name: String,
@@ -160,7 +160,14 @@ impl FromStr for RtspRequest {
             .parse()
             .unwrap();
 
-        let port_rtp = request.next().unwrap().split(' ').nth(3).unwrap().parse().unwrap();
+        let port_rtp = request
+            .next()
+            .unwrap()
+            .split(' ')
+            .nth(3)
+            .unwrap()
+            .parse()
+            .unwrap();
 
         return Ok(Self {
             request_type: request_type.parse().unwrap(),
