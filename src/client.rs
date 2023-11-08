@@ -1,17 +1,18 @@
 #![allow(dead_code)]
-
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::net::{TcpStream, UdpSocket};
 use std::rc::Rc;
-
 use clap::Parser;
-use gtk::prelude::*;
+use gtk::{prelude::*, Image};
 use gtk::{Application, ApplicationWindow};
 use rand::Rng;
 
 use crate::o_node::message;
 use crate::o_node::message::rtsp::{RtspRequest, RtspResponse};
+
+const CACHE_DIRECTORY: &'static str = "tmp";
+const CACHE_EXTENSION: &'static str = "Mjpeg";
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -38,6 +39,7 @@ struct VideoWidgets {
     setup_button: gtk::Button,
     pause_button: gtk::Button,
     teardown_button: gtk::Button,
+    image_widget: Image,
     label: gtk::Label,
 }
 
@@ -45,10 +47,14 @@ impl VideoWidgets {
     pub fn new(window: &ApplicationWindow) -> Self {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
-        let video = gtk::Video::new();
-        video.set_vexpand(true);
-        video.set_autoplay(true);
-        vbox.append(&video);
+        //let video = gtk::Video::new();
+        //video.set_vexpand(true);
+        //video.set_autoplay(true);
+        //vbox.append(&video);
+
+        let image = Image::new();
+        image.set_vexpand(true);
+        vbox.append(&image);
 
         let label = gtk::Label::new(Some("State: Idle"));
 
@@ -72,6 +78,7 @@ impl VideoWidgets {
         window.set_child(Some(&vbox));
 
         Self {
+            image_widget: image,
             play_button,
             setup_button,
             pause_button,
@@ -85,6 +92,7 @@ impl VideoWidgets {
 struct ServerConnection {
     server_socket: TcpStream,
     udp_socket: UdpSocket,
+    session_id: Option<u32>,
 }
 
 #[derive(Debug, Default)]
@@ -143,15 +151,19 @@ impl Client {
         self.server_connection = Some(ServerConnection {
             server_socket,
             udp_socket,
+            session_id: None
         });
 
         self.send_rtps_packet(message);
 
         let response = self.receive_rtps_packet();
+
+        self.server_connection.as_mut().unwrap().session_id = Some(response.session_id());
+
         dbg!(&response);
     }
 
-    fn play(&mut self) {
+    fn play(&mut self, image_widget: &Image) {
         let server_connection = self.server_connection.as_mut().unwrap();
 
         let request = RtspRequest::new(
@@ -178,10 +190,14 @@ impl Client {
         loop {
             let mut buffer = [0; 1024];
 
-            server_connection
+            let n = server_connection
                 .udp_socket
                 .recv(&mut buffer)
                 .expect("Error receiving packet");
+
+            let path = VideoPlayer::store_file_cache(&buffer[..n], server_connection.session_id.unwrap());
+
+            image_widget.set_from_file(Some(path));
 
             dbg!(&buffer);
         }
@@ -237,10 +253,21 @@ impl VideoPlayer {
             }
             Message::Play => {
                 widgets.label.set_text("State: Playing");
-                client.borrow_mut().play();
+                client.borrow_mut().play(&widgets.image_widget);
             }
             _ => todo!(),
         }
+    }
+
+    fn store_file_cache(video: &[u8], session_id: u32) -> String {
+
+        let path = format!("{}/{}.{}", CACHE_DIRECTORY, session_id, CACHE_EXTENSION);
+
+        let mut file = std::fs::File::create(&path).expect("Error creating file");
+
+        file.write(video).expect("Error writing to cache");
+
+        return path;
     }
 
     fn register_callbacks(client: Rc<RefCell<Client>>, widgets: Rc<VideoWidgets>) {

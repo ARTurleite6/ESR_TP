@@ -6,10 +6,12 @@ use std::{
 };
 
 use rand::Rng;
-use rtp_rs::{RtpPacketBuilder, Seq};
 
 use crate::{
-    o_node::message::rtsp::{RequestType, RtspRequest, RtspResponse, Status},
+    o_node::message::{
+        rtp::RtpPacketBuilder,
+        rtsp::{RequestType, RtspRequest, RtspResponse, Status},
+    },
     video::video_stream::VideoStream,
 };
 
@@ -36,12 +38,9 @@ impl TransmissionWorker {
             if let Ok(data) = data {
                 let frame_number = lock_guard.frame_num();
 
-                let packet = RtpPacketBuilder::new()
-                    .sequence(Seq::from(frame_number as u16))
-                    .payload_type(96)
-                    .payload(&data)
-                    .build()
-                    .unwrap();
+                let packet = RtpPacketBuilder::new(&data, 26)
+                    .sequence_number(frame_number as u16)
+                    .build();
 
                 dbg!(&packet);
 

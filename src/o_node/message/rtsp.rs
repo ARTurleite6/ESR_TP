@@ -77,6 +77,10 @@ impl RtspResponse {
             session,
         }
     }
+
+    pub fn session_id(&self) -> u32 {
+        self.session
+    }
 }
 
 impl fmt::Display for RtspResponse {
