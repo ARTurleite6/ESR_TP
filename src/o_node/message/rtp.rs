@@ -1,4 +1,6 @@
-#[derive(Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RtpPacket {
     version: u8,
     padding: u8,
@@ -11,6 +13,12 @@ pub struct RtpPacket {
     payload_type: u8,
     payload: Vec<u8>,
     header: Vec<u8>,
+}
+
+impl RtpPacket {
+    pub fn payload(&self) -> &[u8] {
+        &self.payload
+    }
 }
 
 impl From<RtpPacketBuilder> for RtpPacket {
@@ -86,7 +94,7 @@ impl RtpPacketBuilder {
             marker,
             ssrc,
             payload,
-            header: vec![0, 12],
+            header: vec![0; 12],
             ..Default::default()
         }
     }

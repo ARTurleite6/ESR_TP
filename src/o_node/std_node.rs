@@ -33,12 +33,10 @@ impl StdNode {
 
     fn ask_neighbours(bootstraper_ip: String) -> Result<Answer<Vec<IpAddr>>, NodeCreationError> {
         let query = Query::new(QueryType::Neighbours, None);
-        dbg!(&query);
 
         let mut stream = TcpStream::connect(bootstraper_ip)
             .map_err(|error| NodeCreationError::ErrorConnectingBootstraper(error))?;
 
-        dbg!(&stream);
 
         stream
             .write(&bincode::serialize(&query).unwrap())

@@ -25,10 +25,10 @@ impl TransmissionWorker {
         client_address: (IpAddr, u16),
     ) {
         loop {
-            std::thread::sleep(Duration::from_millis(5));
+            std::thread::sleep(Duration::from_secs_f64(0.05));
 
-            if stop_transmiting.load(std::sync::atomic::Ordering::Relaxed) {
-                break;
+            if stop_transmiting.load(std::sync::atomic::Ordering::SeqCst) {
+                //break;
             }
 
             let mut lock_guard = video_stream.lock().unwrap();
@@ -42,10 +42,19 @@ impl TransmissionWorker {
                     .sequence_number(frame_number as u16)
                     .build();
 
-                dbg!(&packet);
+                let encode = bincode::serialize(&packet).expect("Error serializing packet");
+
+                dbg!(packet.payload().len());
+
+                let size = encode.len() as u64;
+
+                let size_encoded = bincode::serialize(&size).expect("Error serializing size");
+
+                let mut encoded = size_encoded;
+                encoded.extend(encode);
 
                 rtp_socket
-                    .send_to(&packet, client_address)
+                    .send_to(&encoded, client_address)
                     .expect("Error sending data");
             }
         }
@@ -117,7 +126,6 @@ impl ServerWorker {
                         session_id,
                         socket_rtp: None,
                     });
-                    dbg!(&self.client_info);
 
                     let response = RtspResponse::new(Status::Ok, request.seq_number(), session_id);
 
@@ -170,8 +178,6 @@ impl ServerWorker {
     pub fn reply_rtsp(&mut self, response: RtspResponse) {
         let response = bincode::serialize(&response).expect("Error serializing packet");
 
-        dbg!(&response);
-
         self.rtsp_socket.write_all(&response).unwrap();
     }
 
@@ -182,7 +188,6 @@ impl ServerWorker {
             if n == 0 {
                 continue;
             }
-            dbg!(&buffer);
 
             let request = bincode::deserialize(&buffer).expect("Error deserializing packet");
 

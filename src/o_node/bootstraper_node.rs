@@ -28,10 +28,8 @@ impl BootstraperNode {
         stream.read(&mut buffer).unwrap();
 
         let message: Query = bincode::deserialize(&buffer).expect("Error deserializing message");
-        dbg!(&message);
 
         let ip_client = stream.peer_addr().unwrap().ip();
-        dbg!(&ip_client);
 
         let neighbours = self.topology.get(&ip_client).unwrap();
 
@@ -59,7 +57,6 @@ impl Node for BootstraperNode {
                 .get(&ip)
                 .expect("Error getting my own neighbours")
                 .clone();
-            dbg!(&neighbours);
 
             return Ok(BootstraperNode {
                 std_port: configuration.port,
@@ -83,10 +80,8 @@ impl Node for BootstraperNode {
                     self.bootstraping_port
                 );
 
-                dbg!(&socket);
 
                 for stream in socket.incoming() {
-                    dbg!(&stream);
                     self.boostraping_service(stream.unwrap());
                 }
             });

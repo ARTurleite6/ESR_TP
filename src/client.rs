@@ -1,14 +1,17 @@
 #![allow(dead_code)]
-use std::cell::RefCell;
-use std::io::{Read, Write};
-use std::net::{TcpStream, UdpSocket};
-use std::rc::Rc;
 use clap::Parser;
+use gtk::glib::MainContext;
 use gtk::{prelude::*, Image};
 use gtk::{Application, ApplicationWindow};
 use rand::Rng;
+use std::io::{Read, Write};
+use std::net::{TcpStream, UdpSocket};
+use std::rc::Rc;
+use std::sync::{Arc, RwLock};
+use std::thread;
 
 use crate::o_node::message;
+use crate::o_node::message::rtp::RtpPacket;
 use crate::o_node::message::rtsp::{RtspRequest, RtspResponse};
 
 const CACHE_DIRECTORY: &'static str = "tmp";
@@ -46,11 +49,6 @@ struct VideoWidgets {
 impl VideoWidgets {
     pub fn new(window: &ApplicationWindow) -> Self {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-        //let video = gtk::Video::new();
-        //video.set_vexpand(true);
-        //video.set_autoplay(true);
-        //vbox.append(&video);
 
         let image = Image::new();
         image.set_vexpand(true);
@@ -93,6 +91,7 @@ struct ServerConnection {
     server_socket: TcpStream,
     udp_socket: UdpSocket,
     session_id: Option<u32>,
+    stop_transmission: bool,
 }
 
 #[derive(Debug, Default)]
@@ -128,6 +127,13 @@ impl Client {
         }
     }
 
+    fn stop_transmition(&mut self) {
+        self.server_connection
+            .as_mut()
+            .expect("Expected server connection at this point")
+            .stop_transmission = true;
+    }
+
     fn setup(&mut self) {
         let mut rng = rand::thread_rng();
 
@@ -140,8 +146,6 @@ impl Client {
             self.rtp_port,
         );
 
-        dbg!(&message);
-
         let udp_socket =
             UdpSocket::bind(("127.0.0.1", self.rtp_port)).expect("Error binding rtp socket");
 
@@ -151,7 +155,8 @@ impl Client {
         self.server_connection = Some(ServerConnection {
             server_socket,
             udp_socket,
-            session_id: None
+            session_id: None,
+            stop_transmission: false,
         });
 
         self.send_rtps_packet(message);
@@ -159,48 +164,26 @@ impl Client {
         let response = self.receive_rtps_packet();
 
         self.server_connection.as_mut().unwrap().session_id = Some(response.session_id());
-
-        dbg!(&response);
     }
 
-    fn play(&mut self, image_widget: &Image) {
-        let server_connection = self.server_connection.as_mut().unwrap();
+    fn receive_rtp_packet(&self) -> RtpPacket {
+        let mut buffer_size = [0; 8];
 
-        let request = RtspRequest::new(
-            message::rtsp::RequestType::Play,
-            self.video_file.clone(),
-            0,
-            self.rtp_port,
-        );
+        let udp_socket = &self.server_connection.as_ref().unwrap().udp_socket;
 
-        let request = bincode::serialize(&request).expect("Error serializing packet");
+        udp_socket
+            .peek(&mut buffer_size)
+            .expect("Error geetting size of buffer");
 
-        let tcp_socket = &mut server_connection.server_socket;
+        let size: u64 = bincode::deserialize(&buffer_size).expect("Error deserializing size");
 
-        tcp_socket.write_all(&request).unwrap();
+        let mut buffer = vec![0; (size + 8) as usize];
 
-        let mut buffer = [0; 1024];
+        let n = udp_socket
+            .recv(&mut buffer)
+            .expect("Error receiving packet");
 
-        tcp_socket.read(&mut buffer).unwrap();
-
-        let answer: RtspResponse = bincode::deserialize(&buffer).expect("Error deserializing packet");
-
-        dbg!(&answer);
-
-        loop {
-            let mut buffer = [0; 1024];
-
-            let n = server_connection
-                .udp_socket
-                .recv(&mut buffer)
-                .expect("Error receiving packet");
-
-            let path = VideoPlayer::store_file_cache(&buffer[..n], server_connection.session_id.unwrap());
-
-            image_widget.set_from_file(Some(path));
-
-            dbg!(&buffer);
-        }
+        return bincode::deserialize(&buffer[8..n]).expect("Error deserializing packet");
     }
 
     fn send_rtps_packet(&mut self, packet: RtspRequest) {
@@ -226,7 +209,7 @@ impl Client {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Message {
     Play,
     Pause,
@@ -245,45 +228,60 @@ impl VideoPlayer {
         app.run_with_args::<&str>(&[]);
     }
 
-    fn update(message: Message, client: &Rc<RefCell<Client>>, widgets: &Rc<VideoWidgets>) {
+    fn update(message: &Message, client: &Arc<RwLock<Client>>, widgets: &Rc<VideoWidgets>) {
         match message {
             Message::Setup => {
                 widgets.label.set_text("State: Ready");
-                client.borrow_mut().setup();
+                let mut lock = client.write().unwrap();
+                lock.setup();
             }
             Message::Play => {
                 widgets.label.set_text("State: Playing");
-                client.borrow_mut().play(&widgets.image_widget);
+                VideoPlayer::play(client, widgets);
+                dbg!("Play");
+            }
+            Message::Teardown => {
+                widgets.label.set_text("Status: Idle");
+                client.write().unwrap().stop_transmition();
             }
             _ => todo!(),
         }
     }
 
     fn store_file_cache(video: &[u8], session_id: u32) -> String {
-
         let path = format!("{}/{}.{}", CACHE_DIRECTORY, session_id, CACHE_EXTENSION);
 
         let mut file = std::fs::File::create(&path).expect("Error creating file");
 
-        file.write(video).expect("Error writing to cache");
+        let size = file.write_all(video).expect("Error writing to cache");
+
+        dbg!(size);
 
         return path;
     }
 
-    fn register_callbacks(client: Rc<RefCell<Client>>, widgets: Rc<VideoWidgets>) {
-        let client_clone = Rc::clone(&client);
+    fn register_callback(
+        client: &Arc<RwLock<Client>>,
+        widgets: &Rc<VideoWidgets>,
+        message: Message,
+        button: &gtk::Button,
+    ) {
+        let client_clone = Arc::clone(&client);
         let widgets_clone = Rc::clone(&widgets);
-        widgets.setup_button.connect_clicked(move |_| {
-            let message = Message::Setup;
-            Self::update(message, &client_clone, &widgets_clone);
+        button.connect_clicked(move |_| {
+            Self::update(&message, &client_clone, &widgets_clone);
         });
+    }
 
-        let client_clone = Rc::clone(&client);
-        let widgets_clone = Rc::clone(&widgets);
-        widgets.play_button.connect_clicked(move |_| {
-            let message = Message::Play;
-            Self::update(message, &client_clone, &widgets_clone);
-        });
+    fn register_callbacks(client: Arc<RwLock<Client>>, widgets: Rc<VideoWidgets>) {
+        VideoPlayer::register_callback(&client, &widgets, Message::Setup, &widgets.setup_button);
+        VideoPlayer::register_callback(&client, &widgets, Message::Play, &widgets.setup_button);
+        VideoPlayer::register_callback(
+            &client,
+            &widgets,
+            Message::Teardown,
+            &widgets.teardown_button,
+        );
     }
 
     fn setup(app: &Application, init: Args) {
@@ -296,11 +294,76 @@ impl VideoPlayer {
                 .build();
 
             let widgets = Rc::new(VideoWidgets::new(&window));
-            let client = Rc::new(RefCell::new(Client::from_init(&init)));
+            let client = Arc::new(RwLock::new(Client::from_init(&init)));
 
             Self::register_callbacks(client, widgets);
 
             window.present();
+        });
+    }
+
+    fn play(client: &Arc<RwLock<Client>>, video_widget: &Rc<VideoWidgets>) {
+        let mut lock = client.write().unwrap();
+
+        let request = RtspRequest::new(
+            message::rtsp::RequestType::Play,
+            lock.video_file.clone(),
+            0,
+            lock.rtp_port,
+        );
+
+        let server_connection = lock.server_connection.as_mut().unwrap();
+
+        let request = bincode::serialize(&request).expect("Error serializing packet");
+
+        let tcp_socket = &mut server_connection.server_socket;
+
+        tcp_socket.write_all(&request).unwrap();
+
+        let mut buffer = [0; 1024];
+
+        tcp_socket.read(&mut buffer).unwrap();
+
+        let answer: RtspResponse =
+            bincode::deserialize(&buffer).expect("Error deserializing packet");
+
+        let session_id = server_connection.session_id.unwrap();
+        drop(lock);
+
+        let (tx, rx) = MainContext::channel(gtk::glib::Priority::DEFAULT);
+
+        let client_clone = Arc::clone(&client);
+        thread::spawn(move || loop {
+            let lock = client_clone.read().unwrap();
+
+            if lock.server_connection.as_ref().unwrap().stop_transmission {
+                tx.send(None)
+                    .expect("Error sending path to another channel");
+                break;
+            }
+
+            let packet = lock.receive_rtp_packet();
+            drop(lock);
+
+            let data = packet.payload();
+
+            dbg!(data.len());
+
+            let path = VideoPlayer::store_file_cache(&data, session_id);
+            dbg!(&path);
+
+            tx.send(Some(path))
+                .expect("Error sending path to another channel");
+        });
+
+        let video_widgets_clone = Rc::clone(&video_widget);
+        rx.attach(None, move |path| {
+            match path {
+                Some(path) => video_widgets_clone.image_widget.set_from_file(Some(&path)),
+                None => video_widgets_clone.image_widget.clear(),
+            };
+            while gtk::glib::MainContext::default().iteration(false) {}
+            return gtk::glib::ControlFlow::Continue;
         });
     }
 }

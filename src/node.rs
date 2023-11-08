@@ -6,7 +6,6 @@ fn main() -> Result<(), NodeCreationError> {
 
     match create_node(config) {
         Ok(node) => {
-            dbg!(&node);
             node.run()?;
         }
         Err(err) => println!("Error creating node: {:?}", err),
