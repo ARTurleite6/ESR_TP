@@ -28,7 +28,7 @@ impl TransmissionWorker {
             std::thread::sleep(Duration::from_secs_f64(0.05));
 
             if stop_transmiting.load(std::sync::atomic::Ordering::SeqCst) {
-                //break;
+                break;
             }
 
             let mut lock_guard = video_stream.lock().unwrap();
@@ -42,11 +42,10 @@ impl TransmissionWorker {
                     .sequence_number(frame_number as u16)
                     .build();
 
-                let encode = bincode::serialize(&packet).expect("Error serializing packet");
-
-                dbg!(packet.payload().len());
+                let encode = packet.transmit_data();
 
                 let size = encode.len() as u64;
+                dbg!(size);
 
                 let size_encoded = bincode::serialize(&size).expect("Error serializing size");
 
@@ -56,6 +55,7 @@ impl TransmissionWorker {
                 rtp_socket
                     .send_to(&encoded, client_address)
                     .expect("Error sending data");
+
             }
         }
     }

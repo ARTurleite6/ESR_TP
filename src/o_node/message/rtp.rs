@@ -19,6 +19,30 @@ impl RtpPacket {
     pub fn payload(&self) -> &[u8] {
         &self.payload
     }
+
+    pub fn transmit_data(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(self.header.len() + self.payload.len());
+        data.extend(&self.header);
+        data.extend(&self.payload);
+        dbg!(self.payload.len());
+        return data;
+    }
+
+    pub fn decode(data: &[u8]) -> Self {
+        let header = &data[0..12];
+
+        let payload_type = header[1] & 127;
+        let sequence_number = header[3] as u32 + 256 * header[2] as u32;
+        let time_stamp = header[7] as u32
+            + 256 * header[6] as u32
+            + 65536 * header[5] as u32
+            + 16777216 * header[4] as u32;
+
+        return RtpPacketBuilder::new(&data[12..], payload_type)
+            .sequence_number(sequence_number as u16)
+            .timestamp(time_stamp)
+            .build();
+    }
 }
 
 impl From<RtpPacketBuilder> for RtpPacket {
@@ -111,5 +135,21 @@ impl RtpPacketBuilder {
 
     pub fn build(self) -> RtpPacket {
         return RtpPacket::from(self);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_serialize() {
+        use super::*;
+
+        let packet = RtpPacketBuilder::new(&[0; 100], 0).build();
+
+        let data = packet.transmit_data();
+
+        let packet2 = RtpPacket::decode(&data);
+
+        assert_eq!(packet2.payload(), &[0; 100])
     }
 }
