@@ -45,7 +45,7 @@ impl FromStr for RequestType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub enum Status {
     Ok = 200,
     FileNotFound = 404,
@@ -76,6 +76,14 @@ impl RtspResponse {
             sequence,
             session,
         }
+    }
+
+    pub fn succeded(&self) -> bool {
+        return self.status == Status::Ok;
+    }
+
+    pub fn status(&self) -> Status {
+        return self.status;
     }
 
     pub fn session_id(&self) -> u32 {

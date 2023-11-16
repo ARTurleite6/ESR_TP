@@ -3,7 +3,7 @@ use std::{
     net::{TcpStream, UdpSocket},
 };
 
-use rand::Rng;
+use thiserror::Error;
 
 use crate::o_node::message::{
     self,
@@ -13,12 +13,21 @@ use crate::o_node::message::{
 
 use super::{Args, VideoPlayerComponent};
 
+#[derive(Debug, Error)]
+pub enum RequestError {
+    #[error("Error requesting action")]
+    FailedRequest,
+    #[error("Action Not Possible at the moment, reason: {0}")]
+    ActionNotPossible(String),
+}
+
 #[derive(Debug)]
 struct ServerConnection {
     server_socket: TcpStream,
-    udp_socket: UdpSocket,
+    udp_socket: Option<UdpSocket>,
     session_id: Option<u32>,
     stop_transmission: bool,
+    sequence_number: u32,
 }
 
 #[derive(Debug, Default)]
@@ -54,15 +63,19 @@ impl Client {
         }
     }
 
-    pub fn make_request(&mut self, request: RequestType, seq_number: u16) -> RtspResponse {
-        let request = RtspRequest::new(
-            message::rtsp::RequestType::Play,
-            self.video_file.clone(),
-            0,
-            self.rtp_port,
-        );
+    pub fn make_request(
+        &mut self,
+        request: RequestType,
+        seq_number: u32,
+    ) -> Result<RtspResponse, RequestError> {
+        let server_connection =
+            self.server_connection
+                .as_mut()
+                .ok_or(RequestError::ActionNotPossible(
+                    "You must setup connection first".to_string(),
+                ))?;
 
-        let server_connection = self.server_connection.as_mut().unwrap();
+        let request = RtspRequest::new(request, self.video_file.clone(), seq_number, self.rtp_port);
 
         let request = bincode::serialize(&request).expect("Error serializing packet");
 
@@ -74,7 +87,7 @@ impl Client {
 
         tcp_socket.read(&mut buffer).unwrap();
 
-        return bincode::deserialize(&buffer).expect("Error deserializing packet");
+        return Ok(bincode::deserialize(&buffer).expect("Error deserializing packet"));
     }
 
     pub fn session_id(&self) -> u32 {
@@ -92,17 +105,45 @@ impl Client {
             .stop_transmission
     }
 
-    pub fn stop_transmition(&mut self) {
-        self.server_connection
-            .as_mut()
-            .expect("Expected server connection at this point")
-            .stop_transmission = true;
+    pub fn stop_transmition(&mut self) -> Result<(), RequestError> {
+        let sequence_number = self
+            .server_connection
+            .as_ref()
+            .ok_or(RequestError::ActionNotPossible(
+                "No server connection".to_string(),
+            ))?
+            .sequence_number;
+
+        let message = RtspRequest::new(
+            message::rtsp::RequestType::Teardown,
+            self.video_file.clone(),
+            sequence_number + 1,
+            self.rtp_port,
+        );
+
+        self.send_rtsp_packet(message);
+
+        let response = self.receive_rtsp_packet();
+
+        if !response.succeded() {
+            return Err(RequestError::FailedRequest);
+        }
+
+        let server_connection =
+            self.server_connection
+                .as_mut()
+                .ok_or(RequestError::ActionNotPossible(
+                    "No server connection".to_string(),
+                ))?;
+
+        server_connection.stop_transmission = true;
+        server_connection.udp_socket = None;
+
+        Ok(())
     }
 
     pub fn setup(&mut self) {
-        let mut rng = rand::thread_rng();
-
-        let seq_number = rng.gen();
+        let seq_number = 1;
 
         let message = RtspRequest::new(
             message::rtsp::RequestType::Setup,
@@ -119,14 +160,15 @@ impl Client {
 
         self.server_connection = Some(ServerConnection {
             server_socket,
-            udp_socket,
+            udp_socket: Some(udp_socket),
             session_id: None,
             stop_transmission: false,
+            sequence_number: 1,
         });
 
-        self.send_rtps_packet(message);
+        self.send_rtsp_packet(message);
 
-        let response = self.receive_rtps_packet();
+        let response = self.receive_rtsp_packet();
 
         self.server_connection.as_mut().unwrap().session_id = Some(response.session_id());
     }
@@ -134,7 +176,13 @@ impl Client {
     pub fn receive_rtp_packet(&self) -> RtpPacket {
         let mut buffer_size = [0; 8];
 
-        let udp_socket = &self.server_connection.as_ref().unwrap().udp_socket;
+        let udp_socket = &self
+            .server_connection
+            .as_ref()
+            .unwrap()
+            .udp_socket
+            .as_ref()
+            .expect("Error getting udp socket");
 
         udp_socket
             .peek(&mut buffer_size)
@@ -155,7 +203,7 @@ impl Client {
         return RtpPacket::decode(buffer);
     }
 
-    fn send_rtps_packet(&mut self, packet: RtspRequest) {
+    fn send_rtsp_packet(&mut self, packet: RtspRequest) {
         self.server_connection
             .as_mut()
             .unwrap()
@@ -164,7 +212,7 @@ impl Client {
             .expect("Error sending packet to server");
     }
 
-    fn receive_rtps_packet(&mut self) -> RtspResponse {
+    fn receive_rtsp_packet(&mut self) -> RtspResponse {
         let mut buffer = [0; 1024];
 
         self.server_connection

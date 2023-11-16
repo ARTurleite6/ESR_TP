@@ -5,7 +5,7 @@ mod video_widgets;
 
 use clap::Parser;
 use gtk::glib::MainContext;
-use gtk::{prelude::*, Image};
+use gtk::{prelude::*, Button, Image};
 use gtk::{Application, ApplicationWindow};
 use std::io::Write;
 use std::rc::Rc;
@@ -62,9 +62,9 @@ impl VideoPlayer {
     fn update(message: &Message, client: &Arc<RwLock<Client>>, widgets: &Rc<VideoWidgets>) {
         match message {
             Message::Setup => {
-                widgets.set_label_text("State: Ready");
                 let mut lock = client.write().unwrap();
                 lock.setup();
+                widgets.set_label_text("State: Ready");
             }
             Message::Play => {
                 widgets.set_label_text("State: Playing");
@@ -72,8 +72,12 @@ impl VideoPlayer {
                 dbg!("Play");
             }
             Message::Teardown => {
-                widgets.set_label_text("State: Idle");
-                client.write().unwrap().stop_transmition();
+                if client.write().unwrap().stop_transmition().is_err() {
+                    dbg!("Error stopping transmission");
+                    widgets.set_label_text("State: Error stopping transmission");
+                } else {
+                    widgets.set_label_text("State: Idle");
+                }
             }
             _ => todo!(),
         }
