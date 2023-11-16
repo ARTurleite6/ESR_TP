@@ -139,7 +139,6 @@ impl ServerWorker {
                 }
             }
             RequestType::Teardown => {
-                
                 println!("Processing teardown");
 
                 self.stop_transmission
@@ -153,7 +152,10 @@ impl ServerWorker {
 
                 self.reply_rtsp(response);
 
-                self.client_info.as_mut().expect("Expected client information").close_connection();
+                self.client_info
+                    .as_mut()
+                    .expect("Expected client information")
+                    .close_connection();
             }
             _ => {
                 todo!()
