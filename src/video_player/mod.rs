@@ -14,7 +14,7 @@ use std::thread;
 
 use crate::o_node::message;
 
-use self::client::Client;
+use self::client::{Client, RequestError};
 use self::video_widgets::VideoWidgets;
 
 const CACHE_DIRECTORY: &'static str = "tmp";
@@ -62,13 +62,19 @@ impl VideoPlayer {
     fn update(message: &Message, client: &Arc<RwLock<Client>>, widgets: &Rc<VideoWidgets>) {
         match message {
             Message::Setup => {
-                let mut lock = client.write().unwrap();
-                lock.setup();
                 widgets.set_label_text("State: Ready");
+                let mut lock = client.write().unwrap();
+                if lock.setup().is_err() {
+                    dbg!("Error setting up");
+                    widgets.set_label_text("State: Idle (Error setting up)");
+                }
             }
             Message::Play => {
                 widgets.set_label_text("State: Playing");
-                VideoPlayer::play(client, widgets);
+                if VideoPlayer::play(client, widgets).is_err() {
+                    dbg!("Error playing video");
+                    widgets.set_label_text("State: Idle (Error playing video)");
+                }
                 dbg!("Play");
             }
             Message::Teardown => {
@@ -106,7 +112,11 @@ impl VideoPlayer {
         });
     }
 
-    fn register_callbacks(client: Arc<RwLock<Client>>, widgets: Rc<VideoWidgets>) {
+    fn register_callbacks(
+        client: Arc<RwLock<Client>>,
+        widgets: Rc<VideoWidgets>,
+        window: &ApplicationWindow,
+    ) {
         VideoPlayer::register_callback(&client, &widgets, Message::Setup, widgets.setup_button());
         VideoPlayer::register_callback(&client, &widgets, Message::Play, widgets.play_button());
         VideoPlayer::register_callback(
@@ -129,16 +139,19 @@ impl VideoPlayer {
             let widgets = Rc::new(VideoWidgets::new(&window));
             let client = Arc::new(RwLock::new(Client::from_init(&init)));
 
-            Self::register_callbacks(client, widgets);
+            Self::register_callbacks(client, widgets, &window);
 
             window.present();
         });
     }
 
-    fn play(client: &Arc<RwLock<Client>>, video_widget: &Rc<VideoWidgets>) {
+    fn play(
+        client: &Arc<RwLock<Client>>,
+        video_widget: &Rc<VideoWidgets>,
+    ) -> Result<(), RequestError> {
         let mut lock = client.write().unwrap();
 
-        let answer = lock.make_request(message::rtsp::RequestType::Play, 0);
+        let answer = lock.make_request(message::rtsp::RequestType::Play, 0)?;
 
         let session_id = lock.session_id();
         drop(lock);
@@ -173,5 +186,7 @@ impl VideoPlayer {
             while gtk::glib::MainContext::default().iteration(false) {}
             return gtk::glib::ControlFlow::Continue;
         });
+
+        return Ok(());
     }
 }

@@ -19,6 +19,8 @@ pub enum RequestError {
     FailedRequest,
     #[error("Action Not Possible at the moment, reason: {0}")]
     ActionNotPossible(String),
+    #[error("Error connecting to server")]
+    ConnectionError,
 }
 
 #[derive(Debug)]
@@ -142,7 +144,7 @@ impl Client {
         Ok(())
     }
 
-    pub fn setup(&mut self) {
+    pub fn setup(&mut self) -> Result<(), RequestError> {
         let seq_number = 1;
 
         let message = RtspRequest::new(
@@ -156,7 +158,7 @@ impl Client {
             UdpSocket::bind(("127.0.0.1", self.rtp_port)).expect("Error binding rtp socket");
 
         let server_socket = TcpStream::connect((self.server_name.as_str(), self.server_port))
-            .expect("Error connecting to server");
+            .or_else(|_| Err(RequestError::FailedRequest))?;
 
         self.server_connection = Some(ServerConnection {
             server_socket,
@@ -171,6 +173,8 @@ impl Client {
         let response = self.receive_rtsp_packet();
 
         self.server_connection.as_mut().unwrap().session_id = Some(response.session_id());
+
+        return Ok(());
     }
 
     pub fn receive_rtp_packet(&self) -> RtpPacket {
