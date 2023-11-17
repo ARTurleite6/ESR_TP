@@ -8,22 +8,69 @@ use std::{
 use rand::Rng;
 
 use crate::{
-    o_node::message::{
+    message::{
         rtp::RtpPacketBuilder,
         rtsp::{RequestType, RtspRequest, RtspResponse, Status},
     },
     video::video_stream::VideoStream,
 };
 
-struct TransmissionWorker;
+struct VideoStreamInfo {
+    video_stream: VideoStream,
+    clients: Vec<(IpAddr, u16)>,
+}
+
+impl VideoStreamInfo {
+    pub fn new(video_stream: VideoStream, clients: Vec<(IpAddr, u16)>) -> Self {
+        Self {
+            video_stream,
+            clients: Vec::new(),
+        }
+    }
+
+    fn next_frame(&mut self) -> std::io::Result<Vec<u8>> {
+        self.video_stream.next_frame()
+    }
+
+    fn frame_num(&self) -> u32 {
+        self.video_stream.frame_num()
+    }
+
+    fn send_data(&self, data: &[u8], rtp_socket: &UdpSocket) {
+        for client in &self.clients {
+            rtp_socket
+                .send_to(data, client)
+                .expect("Error sending data");
+        }
+    }
+
+    fn add_client(&mut self, client: (IpAddr, u16)) {
+        self.clients.push(client);
+    }
+
+    fn remove_client(&mut self, client: (IpAddr, u16)) {
+        self.clients.retain(|c| c != &client);
+    }
+}
+
+#[derive(Debug)]
+pub struct TransmissionWorker {
+    rtp_socket: Arc<UdpSocket>,
+    video_client_addrs: Arc<Mutex<VideoStreamInfo>>,
+}
 
 impl TransmissionWorker {
-    fn run(
-        video_stream: Arc<Mutex<VideoStream>>,
+    pub fn new(
         rtp_socket: Arc<UdpSocket>,
-        stop_transmiting: Arc<AtomicBool>,
-        client_address: (IpAddr, u16),
-    ) {
+        video_client_addrs: Arc<Mutex<VideoStreamInfo>>,
+    ) -> Self {
+        Self {
+            rtp_socket,
+            video_client_addrs,
+        }
+    }
+
+    fn run(&self, stop_transmiting: Arc<AtomicBool>) {
         loop {
             std::thread::sleep(Duration::from_secs_f64(0.05));
 
@@ -31,7 +78,7 @@ impl TransmissionWorker {
                 break;
             }
 
-            let mut lock_guard = video_stream.lock().unwrap();
+            let mut lock_guard = self.video_client_addrs.lock().unwrap();
 
             let data = lock_guard.next_frame();
 
@@ -52,9 +99,7 @@ impl TransmissionWorker {
                 let mut encoded = size_encoded;
                 encoded.extend(encode);
 
-                rtp_socket
-                    .send_to(&encoded, client_address)
-                    .expect("Error sending data");
+                lock_guard.send_data(&encoded, &self.rtp_socket)
             }
         }
     }
@@ -68,7 +113,7 @@ enum ServerState {
 }
 
 #[derive(Debug)]
-pub struct ServerWorker {
+pub struct StreamingWorker {
     rtsp_socket: TcpStream,
     server_state: ServerState,
     client_info: Option<ClientInfo>,
@@ -95,7 +140,7 @@ impl ClientInfo {
     }
 }
 
-impl ServerWorker {
+impl StreamingWorker {
     pub fn new(rtsp_socket: TcpStream) -> Self {
         Self {
             rtsp_socket,
@@ -135,7 +180,7 @@ impl ServerWorker {
             }
             RequestType::Play => {
                 if let ServerState::Ready = self.server_state {
-                    self.process_setup(request);
+                    self.process_play(request);
                 }
             }
             RequestType::Teardown => {
@@ -163,7 +208,7 @@ impl ServerWorker {
         }
     }
 
-    fn process_setup(&mut self, request: RtspRequest) {
+    fn process_play(&mut self, request: RtspRequest) {
         println!("Processing play");
         let client_info = self.client_info.as_mut().unwrap();
         client_info.open_connection();

@@ -3,13 +3,9 @@ use std::{
     net::{IpAddr, TcpStream, UdpSocket},
 };
 
-use crate::o_node::{
-    message::{
-        answer::Answer,
-        query::{Query, QueryType},
-        Message,
-    },
-    NodeCreationError,
+use crate::{
+    message::{answer::Answer, query::Query, query::QueryType, Message},
+    o_node::NodeCreationError,
 };
 
 use super::{
@@ -36,7 +32,6 @@ impl StdNode {
 
         let mut stream = TcpStream::connect(bootstraper_ip)
             .map_err(|error| NodeCreationError::ErrorConnectingBootstraper(error))?;
-
 
         stream
             .write(&bincode::serialize(&query).unwrap())

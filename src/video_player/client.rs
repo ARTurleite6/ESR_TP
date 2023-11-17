@@ -5,7 +5,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::o_node::message::{
+use crate::message::{
     self,
     rtp::RtpPacket,
     rtsp::{RequestType, RtspRequest, RtspResponse},

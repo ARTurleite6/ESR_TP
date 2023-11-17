@@ -4,6 +4,7 @@ pub mod answer;
 pub mod query;
 pub mod rtp;
 pub mod rtsp;
+pub mod metrics;
 
 pub trait Message<T>: std::fmt::Debug + Clone + Serialize + for<'de> Deserialize<'de> {
     fn id(&self) -> u32;
@@ -20,4 +21,3 @@ pub enum Status {
     Error,
     Query,
 }
-

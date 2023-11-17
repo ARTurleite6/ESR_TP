@@ -1,5 +1,5 @@
-use super::{Status, Message, query::Query};
-use serde::{Serialize, Deserialize};
+use super::{query::Query, Message, Status};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Answer<T> {
@@ -8,7 +8,7 @@ pub struct Answer<T> {
     payload: T,
 }
 
-impl<T: Clone + std::fmt::Debug + Serialize + for <'de> Deserialize<'de>> Message<T> for Answer<T> {
+impl<T: Clone + std::fmt::Debug + Serialize + for<'de> Deserialize<'de>> Message<T> for Answer<T> {
     fn id(&self) -> u32 {
         self.id
     }
@@ -23,7 +23,8 @@ impl<T> Answer<T> {
         Self {
             id: message.id(),
             status,
-            payload
+            payload,
         }
     }
 }
+

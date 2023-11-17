@@ -5,14 +5,14 @@ mod video_widgets;
 
 use clap::Parser;
 use gtk::glib::MainContext;
-use gtk::{prelude::*, Button, Image};
+use gtk::prelude::*;
 use gtk::{Application, ApplicationWindow};
 use std::io::Write;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use crate::o_node::message;
+use crate::message;
 
 use self::client::{Client, RequestError};
 use self::video_widgets::VideoWidgets;
