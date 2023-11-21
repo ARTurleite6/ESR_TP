@@ -128,17 +128,20 @@ impl<'a> StreamingWorker<'a> {
                     self.client_info.as_ref().unwrap().session_id,
                 );
 
-                self.reply_rtsp(response);
                 let client_info = self.client_info.as_ref().unwrap();
 
                 let address = (client_info.ip_address, client_info.rtp_port);
 
-                let lock = self.video_workers.lock().unwrap();
+                let mut lock = self.video_workers.lock().unwrap();
 
                 let worker = lock.get(request.file_request()).unwrap();
 
-                worker
-                    .remove_client(address);
+                if worker.remove_client(address) == 0 {
+                    dbg!("Removing worker");
+                    lock.remove(request.file_request()).unwrap();
+                }
+
+                self.reply_rtsp(response);
             }
             _ => {
                 todo!()

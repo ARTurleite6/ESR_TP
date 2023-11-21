@@ -47,12 +47,16 @@ impl VideoStreamInfo {
         return Ok(());
     }
 
-    pub fn add_client(&self, client: (IpAddr, u16)) {
-        self.clients.lock().unwrap().push(client);
+    pub fn add_client(&self, client: (IpAddr, u16)) -> usize {
+        let mut lock = self.clients.lock().unwrap();
+        lock.push(client);
+        return lock.len();
     }
 
-    pub fn remove_client(&self, client: (IpAddr, u16)) {
-        self.clients.lock().unwrap().retain(|c| c != &client);
+    pub fn remove_client(&self, client: (IpAddr, u16)) -> usize {
+        let mut lock = self.clients.lock().unwrap();
+        lock.retain(|c| c != &client);
+        return lock.len();
     }
 
     pub fn has_clients(&self) -> bool {
