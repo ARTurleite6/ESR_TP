@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::o_node::message::{answer::Answer, query::Query, Status};
+use crate::message::{answer::Answer, query::Query, Status};
 
 use super::{
     config::{Configuration, NodeFunction},
@@ -79,7 +79,6 @@ impl Node for BootstraperNode {
                     "Bootstraper Node listening at port {}",
                     self.bootstraping_port
                 );
-
 
                 for stream in socket.incoming() {
                     self.boostraping_service(stream.unwrap());

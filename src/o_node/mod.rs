@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 
-pub mod config;
 pub mod bootstraper_node;
+pub mod config;
 pub mod std_node;
-pub mod message;
 
 use std::fmt::Debug;
 
@@ -26,8 +25,11 @@ pub enum NodeCreationError {
 
 pub fn create_node(configuration: Configuration) -> Result<Box<dyn Node>, NodeCreationError> {
     match configuration.node_function {
-        NodeFunction::Bootstraper { .. } => BootstraperNode::from_configuration(configuration).map(|node| Box::new(node) as Box<dyn Node>),
-        NodeFunction::NonBootstraper { .. } => StdNode::from_configuration(configuration).map(|node| Box::new(node) as Box<dyn Node>),
+        NodeFunction::Bootstraper { .. } => BootstraperNode::from_configuration(configuration)
+            .map(|node| Box::new(node) as Box<dyn Node>),
+        NodeFunction::NonBootstraper { .. } => {
+            StdNode::from_configuration(configuration).map(|node| Box::new(node) as Box<dyn Node>)
+        }
     }
 }
 

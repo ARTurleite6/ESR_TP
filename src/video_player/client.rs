@@ -5,7 +5,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::o_node::message::{
+use crate::message::{
     self,
     rtp::RtpPacket,
     rtsp::{RequestType, RtspRequest, RtspResponse},
@@ -45,6 +45,7 @@ impl VideoPlayerComponent for Client {
     type Init = Args;
 
     fn from_init(init: &Self::Init) -> Self {
+        dbg!(init);
         Self::new(
             init.server_name.clone(),
             init.server_port,
@@ -171,6 +172,8 @@ impl Client {
         self.send_rtsp_packet(message);
 
         let response = self.receive_rtsp_packet();
+
+        dbg!(&response);
 
         self.server_connection.as_mut().unwrap().session_id = Some(response.session_id());
 

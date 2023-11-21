@@ -5,14 +5,14 @@ mod video_widgets;
 
 use clap::Parser;
 use gtk::glib::MainContext;
-use gtk::{prelude::*, Button, Image};
+use gtk::prelude::*;
 use gtk::{Application, ApplicationWindow};
 use std::io::Write;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use crate::o_node::message;
+use crate::message;
 
 use self::client::{Client, RequestError};
 use self::video_widgets::VideoWidgets;
@@ -51,7 +51,7 @@ enum Message {
 impl VideoPlayer {
     pub fn run(init: Args) {
         let app = Application::builder()
-            .application_id("video.streamer")
+            .application_id(&format!("video.streamer/{}", init.rtp_port))
             .build();
 
         Self::setup(&app, init);
@@ -64,7 +64,9 @@ impl VideoPlayer {
             Message::Setup => {
                 widgets.set_label_text("State: Ready");
                 let mut lock = client.write().unwrap();
-                if lock.setup().is_err() {
+                let result = lock.setup();
+                dbg!(&result);
+                if result.is_err() {
                     dbg!("Error setting up");
                     widgets.set_label_text("State: Idle (Error setting up)");
                 }
@@ -138,6 +140,7 @@ impl VideoPlayer {
 
             let widgets = Rc::new(VideoWidgets::new(&window));
             let client = Arc::new(RwLock::new(Client::from_init(&init)));
+            dbg!(&client);
 
             Self::register_callbacks(client, widgets, &window);
 

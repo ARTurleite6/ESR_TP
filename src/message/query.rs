@@ -14,14 +14,14 @@ pub struct Query {
     id: u32,
     query_type: QueryType,
     status: Status,
-    payload: Option<String>
+    payload: Option<String>,
 }
 
 impl Message<String> for Query {
     fn id(&self) -> u32 {
         self.id
     }
-    
+
     fn payload(&self) -> Option<&String> {
         self.payload.as_ref()
     }
@@ -38,3 +38,4 @@ impl Query {
         }
     }
 }
+
