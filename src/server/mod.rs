@@ -1,25 +1,27 @@
-use std::{collections::HashMap, sync::RwLock};
-
-use self::server_worker::{StreamingWorker, TransmissionWorker};
+use std::{collections::HashMap, sync::{Mutex, Arc}};
 
 mod metrics_worker;
-pub mod server_worker;
+mod server_worker;
+
+use crate::server::server_worker::streaming_worker::StreamingWorker;
+
+use self::server_worker::streaming_worker::transmission_worker::TransmissionWorker;
 
 #[derive(Debug, Default)]
 pub struct Server {
     port: u16,
     files_available: Vec<String>,
-    video_workers: HashMap<String, TransmissionWorker>,
+    video_workers: Mutex<HashMap<String, Arc<TransmissionWorker>>>,
 }
 
 impl Server {
     pub fn new(port: u16, files_available: Vec<String>) -> Self {
         //verify that the files are available
-        for file in &files_available {
-            if !std::path::Path::new(file).exists() {
-                panic!("File {} does not exist", file);
-            }
-        }
+        //for file in &files_available {
+        //    if !std::path::Path::new(file).exists() {
+        //        panic!("File {} does not exist", file);
+        //    }
+        //}
 
         Self {
             port,
@@ -30,31 +32,31 @@ impl Server {
 
     pub fn run(&self) {
         std::thread::scope(|s| {
-            let streaming_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let streaming_listener = std::net::TcpListener::bind(("127.0.0.1", self.port)).unwrap();
             println!("Listening on port {}", self.port);
 
-            let metrics_listener = std::net::TcpListener::bind(("127.0.0.1", self.port)).unwrap();
+            //let metrics_listener = std::net::TcpListener::bind(("127.0.0.1", self.port)).unwrap();
 
             let streaming_port = streaming_listener.local_addr().unwrap().port();
 
-            let metrics_worker = metrics_worker::MetricsWorker::new(
-                streaming_port,
-                metrics_listener,
-                &self
-                    .files_available
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<&str>>(),
-            );
+            //let metrics_worker = metrics_worker::MetricsWorker::new(
+            //    streaming_port,
+            //    metrics_listener,
+            //    &self
+            //        .files_available
+            //        .iter()
+            //        .map(|s| s.as_str())
+            //        .collect::<Vec<&str>>(),
+            //);
 
-            s.spawn(move || {
-                metrics_worker.run();
-            });
+            //s.spawn(move || {
+            //    metrics_worker.run();
+            //});
 
             for stream in streaming_listener.incoming() {
                 let stream = stream.unwrap();
                 s.spawn(move || {
-                    let mut worker = StreamingWorker::new(stream);
+                    let mut worker = StreamingWorker::new(stream, &self.video_workers);
                     worker.run();
                 });
             }
