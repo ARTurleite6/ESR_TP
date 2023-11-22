@@ -1,12 +1,66 @@
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+use crate::o_node::neighbour::Neighbour;
+
 use super::{Message, Status};
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FileQuery {
+    file: String,
+    already_asked: Vec<Neighbour>
+}
+
+impl FileQuery {
+    pub fn new(file: &str, already_asked: Vec<Neighbour>) -> Self {
+        Self {
+            file: file.to_string(),
+            already_asked
+        }
+    }
+
+    pub fn file(&self) -> &str {
+        return &self.file;
+    }
+
+    pub fn visited_neighbour(&self, neighbour: &Neighbour) -> bool {
+        return self.already_asked.contains(neighbour);
+    }
+
+    pub fn add_neighbour(&mut self, neighbour: Neighbour) {
+        self.already_asked.push(neighbour);
+    }
+    
+    pub fn add_neighbours(&mut self, neighbours: &[Neighbour]) {
+        self.already_asked.extend_from_slice(neighbours);
+    }
+
+    pub fn is_first_node(&self) -> bool {
+        return self.already_asked.is_empty();
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum QueryType {
     #[default]
     Neighbours,
+    File(FileQuery),
+}
+
+impl QueryType {
+    pub fn file_query(&self) -> Option<&FileQuery> {
+        match self {
+            Self::File(args) => Some(&args),
+            _ => None
+        }
+    }
+
+    pub fn file_query_mut(&mut self) -> Option<&mut FileQuery> {
+        match self {
+            Self::File(args) => Some(args),
+            _ => None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -36,6 +90,14 @@ impl Query {
             status: Status::Query,
             payload,
         }
+    }
+
+    pub fn query_type(&self) -> &QueryType {
+        return &self.query_type;
+    }
+
+    pub fn query_type_mut(&mut self) -> &mut QueryType {
+        return &mut self.query_type;
     }
 }
 

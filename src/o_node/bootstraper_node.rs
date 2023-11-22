@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{BufReader, Read, Write},
-    net::{IpAddr, TcpListener, TcpStream, UdpSocket},
+    net::{IpAddr, TcpListener, TcpStream},
     str::FromStr,
 };
 
@@ -10,15 +10,16 @@ use crate::message::{answer::Answer, query::Query, Status};
 
 use super::{
     config::{Configuration, NodeFunction},
+    neighbour::Neighbour,
+    std_node::StdNode,
     Node, NodeCreationError,
 };
 
 #[derive(Debug, Default)]
 pub struct BootstraperNode {
-    std_port: u16,
     bootstraping_port: u16,
-    topology: HashMap<IpAddr, Vec<IpAddr>>,
-    neighbours: Vec<IpAddr>,
+    topology: HashMap<IpAddr, Vec<Neighbour>>,
+    std_node: StdNode,
 }
 
 impl BootstraperNode {
@@ -41,14 +42,12 @@ impl BootstraperNode {
 
 impl Node for BootstraperNode {
     fn from_configuration(configuration: Configuration) -> Result<Self, NodeCreationError>
-    where
-        Self: Sized,
     {
         if let NodeFunction::Bootstraper { ref topology, port } = configuration.node_function {
             let file = File::open(topology)
                 .map_err(|_err| NodeCreationError::InexistentTopology(topology.clone()))?;
 
-            let topology: HashMap<IpAddr, Vec<IpAddr>> =
+            let topology: HashMap<IpAddr, Vec<Neighbour>> =
                 serde_json::from_reader(BufReader::new(file)).unwrap();
 
             let ip = IpAddr::from_str("127.0.0.1").unwrap();
@@ -58,11 +57,12 @@ impl Node for BootstraperNode {
                 .expect("Error getting my own neighbours")
                 .clone();
 
+            let std_node = StdNode::new(configuration.port, &neighbours);
+
             return Ok(BootstraperNode {
-                std_port: configuration.port,
                 bootstraping_port: port,
                 topology,
-                neighbours,
+                std_node,
             });
         } else {
             panic!("Expected a bootstraper node configuration");
@@ -87,17 +87,14 @@ impl Node for BootstraperNode {
 
             //std thread
             s.spawn(|| {
-                let socket = UdpSocket::bind(("127.0.0.1", self.bootstraping_port))
-                    .expect("Error binding standard socket");
-
-                let mut buffer = [0; 1024];
-                loop {
-                    let (_, client) = socket.recv_from(&mut buffer).unwrap();
-                    dbg!(&client);
-                }
+                self.std_node.run()
             });
         });
 
         Ok(())
+    }
+
+    fn neighbours(&self) -> &[super::neighbour::Neighbour] {
+        return &self.std_node.neighbours();
     }
 }

@@ -21,3 +21,9 @@ pub enum Status {
     Error,
     Query,
 }
+
+impl Status {
+    pub fn is_ok(&self) -> bool {
+        return self == &Self::Ok;
+    }
+}

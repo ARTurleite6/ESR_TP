@@ -3,13 +3,16 @@
 pub mod bootstraper_node;
 pub mod config;
 pub mod std_node;
+mod query_worker;
+pub mod neighbour;
+mod errors;
 
 use std::fmt::Debug;
 
 use config::{Configuration, NodeFunction};
 use thiserror::Error;
 
-use self::{bootstraper_node::BootstraperNode, std_node::StdNode};
+use self::{bootstraper_node::BootstraperNode, std_node::StdNode, neighbour::Neighbour};
 
 #[derive(Debug, Error)]
 pub enum NodeCreationError {
@@ -37,5 +40,8 @@ pub trait Node: Debug {
     fn from_configuration(configuration: Configuration) -> Result<Self, NodeCreationError>
     where
         Self: Sized;
+
+    fn neighbours(&self) -> &[Neighbour];
+
     fn run(&self) -> Result<(), NodeCreationError>;
 }
