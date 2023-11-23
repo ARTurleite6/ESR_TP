@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::{Rng, thread_rng};
 use serde::{Deserialize, Serialize};
 
 use crate::o_node::neighbour::Neighbour;
@@ -84,6 +84,18 @@ impl Message<String> for Query {
 impl Query {
     pub fn new(query_type: QueryType, payload: Option<String>) -> Self {
         let mut rng = rand::thread_rng();
+        Self {
+            id: rng.gen::<u32>(),
+            query_type,
+            status: Status::Query,
+            payload,
+        }
+    }
+
+    pub fn new_file_query(file: &str, payload: Option<String>) -> Self {
+        let mut rng = rand::thread_rng();
+
+        let query_type = QueryType::File(FileQuery::new(file, Vec::new()));
         Self {
             id: rng.gen::<u32>(),
             query_type,

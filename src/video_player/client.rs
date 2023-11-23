@@ -5,11 +5,12 @@ use std::{
 
 use thiserror::Error;
 
-use crate::message::{
+use crate::{message::{
     self,
+    query::Query,
     rtp::RtpPacket,
-    rtsp::{RequestType, RtspRequest, RtspResponse},
-};
+    rtsp::{RequestType, RtspRequest, RtspResponse}, answer::Answer, Message,
+}, o_node::neighbour::Neighbour};
 
 use super::{Args, VideoPlayerComponent};
 
@@ -145,18 +146,43 @@ impl Client {
         Ok(())
     }
 
+    pub fn find_video(&self, udp_socket: &UdpSocket) -> Result<Answer<Vec<Neighbour>>, RequestError> {
+
+        let query = Query::new_file_query(&self.video_file, None);
+
+        let query_encode = bincode::serialize(&query).unwrap();
+
+        dbg!(&(self.server_name.as_str(), self.server_port));
+        udp_socket.send_to(&query_encode, (self.server_name.as_str(), self.server_port)).unwrap();
+
+        let mut buffer = [0; 1024];
+        let n = udp_socket.recv(&mut buffer).unwrap();
+        let answer = bincode::deserialize(&buffer[..n]).unwrap();
+
+        return Ok(answer);
+    }
+
     pub fn setup(&mut self) -> Result<(), RequestError> {
+        let udp_socket =
+            UdpSocket::bind(("127.0.0.1", self.rtp_port)).expect("Error binding rtp socket");
+
+        let answer = self.find_video(&udp_socket).unwrap();
+
+        if !answer.status().is_ok() {
+            return Err(RequestError::FailedRequest);
+        }
+
+        let servers_to_connect = answer.payload().unwrap();
+
         let seq_number = 1;
 
-        let message = RtspRequest::new(
+        let message = RtspRequest::new_with_servers(
             message::rtsp::RequestType::Setup,
             self.video_file.clone(),
             seq_number,
             self.rtp_port,
+            servers_to_connect.clone()
         );
-
-        let udp_socket =
-            UdpSocket::bind(("127.0.0.1", self.rtp_port)).expect("Error binding rtp socket");
 
         let server_socket = TcpStream::connect((self.server_name.as_str(), self.server_port))
             .or_else(|_| Err(RequestError::FailedRequest))?;
