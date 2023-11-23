@@ -17,6 +17,10 @@ path = "src/server_launcher.rs"
 name = "client"
 path = "src/client_launcher.rs"
 
+[[bin]]
+name = "client_top"
+path = "src/client_top_launcher.rs"
+
 [lib]
 name = "esr_lib"
 path = "src/lib.rs"

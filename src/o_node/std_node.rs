@@ -2,16 +2,12 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     net::{IpAddr, SocketAddr, TcpStream, UdpSocket},
-    sync::Mutex, time::Instant,
+    sync::Mutex,
+    time::Instant,
 };
 
 use crate::{
-    message::{
-        answer::Answer,
-        query::Query,
-        query::{QueryType},
-        Message, Status,
-    },
+    message::{answer::Answer, query::Query, query::QueryType, Message, Status},
     o_node::{errors::VideoQueryError, NodeCreationError},
 };
 
@@ -82,8 +78,55 @@ impl StdNode {
         return Ok(answer);
     }
 
-    fn find_best_path(&self, socket: &UdpSocket, mut message: Query, addr: SocketAddr) -> Answer<Vec<u16>> {
-        todo!()
+    fn find_best_path(
+        &self,
+        socket: &UdpSocket,
+        message: &mut Query,
+        addr: SocketAddr,
+    ) -> Result<Answer<Vec<u16>>, VideoQueryError> {
+        let neighbours: Vec<Neighbour> = self
+            .neighbours
+            .iter()
+            .filter(|neighbour| {
+                message
+                    .query_type()
+                    .file_query()
+                    .unwrap()
+                    .visited_neighbour(neighbour)
+            })
+            .map(|neigh| neigh.clone())
+            .collect();
+
+        let data = message.query_type_mut().file_query_mut().unwrap();
+
+        data.add_neighbours(&neighbours);
+
+        let message_clone = message.clone();
+
+        let message_encode = bincode::serialize(&message_clone)
+            .map_err(|_| VideoQueryError::ErrorDeserializingAnswer)?;
+
+        drop(message_clone);
+
+        for neighbour in &neighbours {
+            let neighbour_addr = neighbour.address();
+            socket.send_to(&message_encode, neighbour_addr).unwrap();
+        }
+
+        let mut answers = Vec::with_capacity(neighbours.len());
+        let mut buffer = [0; 1024];
+        let begin = Instant::now();
+        while answers.len() < neighbours.len() && begin.elapsed().as_secs() < 2 {
+            let n = socket.recv(&mut buffer).unwrap();
+
+            let message: Answer<Vec<u16>> = bincode::deserialize(&buffer[..n]).unwrap();
+
+            if message.status().is_ok() {
+                answers.push(message);
+            }
+        }
+
+        return Ok(answers.into_iter().next().unwrap());
     }
 
     fn handle_video_request(
@@ -94,7 +137,8 @@ impl StdNode {
     ) -> Result<(), VideoQueryError> {
         let lock_guard = self.streaming_workers.lock().unwrap();
 
-        let transmits_file = lock_guard.contains_key(message.query_type().file_query().unwrap().file());
+        let transmits_file =
+            lock_guard.contains_key(message.query_type().file_query().unwrap().file());
 
         if transmits_file {
             let answer = Answer::from_message(message, vec![self.port], Status::Ok);
@@ -104,60 +148,12 @@ impl StdNode {
 
             socket.send_to(&answer, addr).unwrap();
         } else {
+            let mut selected_answer = self.find_best_path(socket, &mut message, addr).unwrap();
 
-            let neighbours: Vec<Neighbour> = self
-                .neighbours
-                .iter()
-                .filter(|neighbour| message.query_type().file_query().unwrap().visited_neighbour(neighbour))
-                .map(|neigh| neigh.clone())
-                .collect();
+            selected_answer.payload_mut().push(self.port);
+            let answer = bincode::serialize(&selected_answer).unwrap();
 
-            let data = message.query_type_mut().file_query_mut().unwrap();
-
-            let is_first_node = data.is_first_node();
-
-            data.add_neighbours(&neighbours);
-
-            let message_clone = message.clone();
-
-            let message_encode =
-                bincode::serialize(&message_clone).map_err(|_| VideoQueryError::ErrorDeserializingAnswer)?;
-
-            drop(message_clone);
-
-            for neighbour in &neighbours {
-
-                let neighbour_addr = neighbour.address();
-                socket.send_to(&message_encode, neighbour_addr).unwrap();
-
-            }
-
-            let mut answers = Vec::with_capacity(neighbours.len());
-            let mut buffer = [0; 1024];
-            let begin = Instant::now();
-            while answers.len() < neighbours.len() && begin.elapsed().as_secs() < 2 {
-    
-                let n = socket.recv(&mut buffer).unwrap(); 
-
-                let message: Answer<Vec<u16>> = bincode::deserialize(&buffer[..n]).unwrap();
-
-                if message.status().is_ok() {
-                    answers.push(message);
-                }
-            }
-
-
-            let selected_answer = answers.first_mut().unwrap();
-
-            if !is_first_node {
-                selected_answer.payload_mut().push(self.port);
-                let answer = bincode::serialize(&selected_answer).unwrap();
-
-                socket.send_to(&answer, addr).unwrap();
-            } else {
-                
-            }
-            
+            socket.send_to(&answer, addr).unwrap();
         }
 
         todo!();
