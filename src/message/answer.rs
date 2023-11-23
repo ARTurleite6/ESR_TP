@@ -16,15 +16,25 @@ impl<T: Clone + std::fmt::Debug + Serialize + for<'de> Deserialize<'de>> Message
     fn payload(&self) -> Option<&T> {
         Some(&self.payload)
     }
+
 }
 
 impl<T> Answer<T> {
+
+    pub fn status(&self) -> Status {
+        return self.status;
+    }
+
     pub fn from_message(message: Query, payload: T, status: Status) -> Self {
         Self {
             id: message.id(),
             status,
             payload,
         }
+    }
+
+    pub fn payload_mut(&mut self) -> &mut T {
+        return &mut self.payload;
     }
 }
 
