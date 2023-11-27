@@ -25,6 +25,7 @@ pub struct MetricsResponse {
     already_streaming: bool,
     nr_videos_available: usize,
     nr_videos_already_streaming: usize,
+    streaming_port: u16,
 }
 
 impl MetricsResponse {
@@ -33,12 +34,14 @@ impl MetricsResponse {
         already_streaming: bool,
         nr_videos_available: usize,
         nr_videos_already_streaming: usize,
+        streaming_port: u16,
     ) -> Self {
         Self {
             video_found,
             already_streaming,
             nr_videos_available,
             nr_videos_already_streaming,
+            streaming_port
         }
     }
 
@@ -60,5 +63,9 @@ impl MetricsResponse {
 
     pub fn set_video_found(&mut self, video_found: bool) {
         self.video_found = video_found;
+    }
+    
+    pub fn streaming_port(&self) -> u16 {
+        return self.streaming_port;
     }
 }

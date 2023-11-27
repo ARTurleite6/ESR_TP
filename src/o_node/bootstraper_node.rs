@@ -50,7 +50,7 @@ impl Node for BootstraperNode {
             let topology: HashMap<IpAddr, Vec<Neighbour>> =
                 serde_json::from_reader(BufReader::new(file)).unwrap();
 
-            let ip = IpAddr::from_str("127.0.0.1").unwrap();
+            let ip = IpAddr::from_str("0.0.0.0").unwrap();
 
             let neighbours = topology
                 .get(&ip)
@@ -73,7 +73,7 @@ impl Node for BootstraperNode {
         std::thread::scope(|s| {
             //bootstraping thread
             s.spawn(|| {
-                let socket = TcpListener::bind(("127.0.0.1", self.bootstraping_port))
+                let socket = TcpListener::bind(("0.0.0.0", self.bootstraping_port))
                     .expect("Error binding bootstraping socket");
                 println!(
                     "Bootstraper Node listening at port {}",

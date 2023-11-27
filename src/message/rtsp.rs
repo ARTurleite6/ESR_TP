@@ -170,6 +170,10 @@ impl RtspRequest {
     pub fn port_rtp(&self) -> u16 {
         self.port_rtp
     }
+    
+    pub fn next_server(&mut self) -> Option<Neighbour> {
+        return self.servers_to_contact.pop();
+    }
 }
 
 impl FromStr for RtspRequest {

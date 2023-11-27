@@ -82,13 +82,12 @@ impl StdNode {
         &self,
         socket: &UdpSocket,
         message: &mut Query,
-        addr: SocketAddr,
     ) -> Result<(Answer<Vec<Neighbour>>, IpAddr), VideoQueryError> {
         let neighbours: Vec<Neighbour> = self
             .neighbours
             .iter()
             .filter(|neighbour| {
-                message
+                !message
                     .query_type()
                     .file_query()
                     .unwrap()
@@ -96,6 +95,8 @@ impl StdNode {
             })
             .map(|neigh| neigh.clone())
             .collect();
+
+        dbg!(&neighbours);
 
         let data = message.query_type_mut().file_query_mut().unwrap();
 
@@ -146,7 +147,7 @@ impl StdNode {
             bincode::serialize(&answer).map_err(|_| VideoQueryError::ErrorDeserializingQuery)?
         } else {
             let (mut selected_answer, ip_addr) =
-                self.find_best_path(socket, &mut message, addr).unwrap();
+                self.find_best_path(socket, &mut message).unwrap();
 
             selected_answer
                 .payload_mut()
@@ -157,8 +158,8 @@ impl StdNode {
         };
 
         socket.send_to(&answer, addr).unwrap();
-
-        todo!();
+        
+        return Ok(());
     }
 }
 
@@ -182,7 +183,7 @@ impl Node for StdNode {
 
     fn run(&self) -> Result<(), NodeCreationError> {
         dbg!(self);
-        let socket = UdpSocket::bind(("127.0.0.1", self.port))
+        let socket = UdpSocket::bind(("0.0.0.0", self.port))
             .map_err(|err| NodeCreationError::ErrorBindingSocket(err))?;
 
         let _ = std::thread::scope::<_, Result<(), VideoQueryError>>(|s| {
@@ -191,6 +192,7 @@ impl Node for StdNode {
                 let mut buffer = [0; 1024];
 
                 let result = socket.recv_from(&mut buffer);
+                dbg!(&result);
 
                 if let Ok((size, addr)) = result {
                     let message: Query = bincode::deserialize(&buffer[..size])

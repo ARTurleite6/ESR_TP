@@ -73,7 +73,7 @@ impl<'a> StreamingWorker<'a> {
 
             dbg!(&video_info);
 
-            let rtp_socket = Arc::new(UdpSocket::bind("127.0.0.1:0").unwrap());
+            let rtp_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
 
             lock.insert(
                 video_file.to_string(),

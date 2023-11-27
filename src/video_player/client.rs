@@ -40,6 +40,7 @@ pub struct Client {
     rtp_port: u16,
     video_file: String,
     server_connection: Option<ServerConnection>,
+    servers_to_connect: Vec<Neighbour>,
 }
 
 impl VideoPlayerComponent for Client {
@@ -79,13 +80,17 @@ impl Client {
                     "You must setup connection first".to_string(),
                 ))?;
 
-        let request = RtspRequest::new(request, self.video_file.clone(), seq_number, self.rtp_port);
+        let request = RtspRequest::new_with_servers(request, self.video_file.clone(), seq_number, self.rtp_port, self.servers_to_connect.clone());
+        
+        dbg!(&request);
 
         let request = bincode::serialize(&request).expect("Error serializing packet");
 
         let tcp_socket = &mut server_connection.server_socket;
 
-        tcp_socket.write_all(&request).unwrap();
+        let n = tcp_socket.write(&request).unwrap();
+        
+        dbg!(n);
 
         let mut buffer = [0; 1024];
 
@@ -153,18 +158,21 @@ impl Client {
         let query_encode = bincode::serialize(&query).unwrap();
 
         dbg!(&(self.server_name.as_str(), self.server_port));
-        udp_socket.send_to(&query_encode, (self.server_name.as_str(), self.server_port)).unwrap();
+        let n = udp_socket.send_to(&query_encode, (self.server_name.as_str(), self.server_port)).unwrap();
+        dbg!(n);
 
         let mut buffer = [0; 1024];
         let n = udp_socket.recv(&mut buffer).unwrap();
         let answer = bincode::deserialize(&buffer[..n]).unwrap();
+        
+        dbg!(&answer);
 
         return Ok(answer);
     }
 
     pub fn setup(&mut self) -> Result<(), RequestError> {
         let udp_socket =
-            UdpSocket::bind(("127.0.0.1", self.rtp_port)).expect("Error binding rtp socket");
+            UdpSocket::bind(("0.0.0.0", self.rtp_port)).expect("Error binding rtp socket");
 
         let answer = self.find_video(&udp_socket).unwrap();
 
@@ -173,6 +181,8 @@ impl Client {
         }
 
         let servers_to_connect = answer.payload().unwrap();
+        self.servers_to_connect = servers_to_connect.clone();
+        dbg!(&self.servers_to_connect);
 
         let seq_number = 1;
 
@@ -229,9 +239,7 @@ impl Client {
             .recv(&mut buffer)
             .expect("Error receiving packet");
 
-        dbg!(buffer.len());
         let buffer = &buffer[8..n];
-        dbg!(buffer.len());
 
         return RtpPacket::decode(buffer);
     }

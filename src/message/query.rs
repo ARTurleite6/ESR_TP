@@ -111,5 +111,9 @@ impl Query {
     pub fn query_type_mut(&mut self) -> &mut QueryType {
         return &mut self.query_type;
     }
+
+    pub fn query_file(&self) -> Option<&str> {
+        return self.query_type.file_query().map(|query| query.file.as_str());
+    }
 }
 
