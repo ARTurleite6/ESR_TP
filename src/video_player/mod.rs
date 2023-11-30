@@ -22,7 +22,7 @@ const CACHE_EXTENSION: &'static str = "Mjpeg";
 
 #[derive(Debug, Parser)]
 pub struct Args {
-    #[clap(short = 's', long, default_value = "localhost")]
+    #[clap(short = 's', long, default_value = "0.0.0.0")]
     server_name: String,
     #[clap(short = 'p', long, default_value = "8554")]
     server_port: u16,
@@ -144,7 +144,7 @@ impl VideoPlayer {
 
             Self::register_callbacks(client, widgets, &window);
 
-            window.present();
+            window.show_all();
         });
     }
 

@@ -1,19 +1,22 @@
-use std::{io::Read, net::TcpListener};
+use std::{
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
+};
 
 use crate::message::metrics::{MetricsRequest, MetricsResponse};
 
 #[derive(Debug)]
-pub struct MetricsWorker<'a> {
+pub struct MetricsWorker {
     metrics_listener: TcpListener,
     streaming_port: u16,
-    videos_available: &'a [&'a str],
+    videos_available: Vec<String>,
 }
 
-impl<'a> MetricsWorker<'a> {
+impl MetricsWorker {
     pub fn new(
         streaming_port: u16,
         metrics_listener: TcpListener,
-        videos_available: &'a [&'a str],
+        videos_available: Vec<String>,
     ) -> Self {
         Self {
             streaming_port,
@@ -22,26 +25,43 @@ impl<'a> MetricsWorker<'a> {
         }
     }
 
+    fn handle_client(&self, mut stream: TcpStream) {
+        loop {
+            let mut buffer = [0; 1024];
+
+            stream.read(&mut buffer).unwrap();
+
+            let metrics_request: MetricsRequest = bincode::deserialize(&buffer).unwrap();
+
+            let video_file = metrics_request.video_file();
+
+            let video_found = self
+                .videos_available
+                .iter()
+                .any(|video| video == video_file);
+
+            let metrics_response = MetricsResponse::new(
+                video_found,
+                false,
+                self.videos_available.len(),
+                0,
+                self.streaming_port,
+            );
+
+            let metrics_response = bincode::serialize(&metrics_response).unwrap();
+
+            stream.write(&metrics_response).unwrap();
+        }
+    }
+
     pub fn run(&self) {
         std::thread::scope(|s| {
             for stream in self.metrics_listener.incoming() {
-                todo!();
-                let mut stream = stream.unwrap();
+                let stream = stream.unwrap();
+                
+                dbg!("New client connected to metrics socket");
 
-                s.spawn(|| {
-                    let mut buffer = [0; 1024];
-
-                    stream.read(&mut buffer).unwrap();
-
-                    let metrics_request: MetricsRequest = bincode::deserialize(&buffer).unwrap();
-
-                    let video_file = metrics_request.video_file();
-
-                    let video_found = self.videos_available.contains(&video_file);
-
-                    let metrics_response =
-                        MetricsResponse::new(video_found, false, self.videos_available.len(), 0);
-                });
+                s.spawn(move || self.handle_client(stream));
             }
         });
     }

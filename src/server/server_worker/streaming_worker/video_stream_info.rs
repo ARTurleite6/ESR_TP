@@ -33,7 +33,6 @@ impl VideoStreamInfo {
         let encode = packet.transmit_data();
 
         let size = encode.len() as u64;
-        dbg!(size);
 
         let size_encoded = bincode::serialize(&size).expect("Error serializing size");
 
@@ -41,7 +40,9 @@ impl VideoStreamInfo {
         encoded.extend(encode);
 
         for client in self.clients.lock().unwrap().iter() {
-            let _ = rtp_socket.send_to(&encoded, client);
+            dbg!(client);
+            let n = rtp_socket.send_to(&encoded, client).unwrap();
+            dbg!(n);
         }
 
         return Ok(());

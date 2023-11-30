@@ -1,4 +1,4 @@
-use gtk::{prelude::*, ApplicationWindow, Image};
+use gtk::{Image, ApplicationWindow, prelude::{BoxExt, ContainerExt, LabelExt, ImageExt}};
 
 pub struct VideoWidgets {
     play_button: gtk::Button,
@@ -14,27 +14,27 @@ impl VideoWidgets {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
         let image = Image::new();
-        image.set_vexpand(true);
-        vbox.append(&image);
+        image.set_from_file(Some("tmp/763082.Mjpeg"));
+        vbox.pack_start(&image, true, true, 0);
 
         let label = gtk::Label::new(Some("State: Idle"));
 
         let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
 
         let play_button = gtk::Button::with_label("Play");
-        hbox.append(&play_button);
+        hbox.pack_start(&play_button, false, false, 0);
 
         let setup_button = gtk::Button::with_label("Setup");
-        hbox.append(&setup_button);
+        hbox.pack_start(&setup_button, false, false, 0);
 
         let pause_button = gtk::Button::with_label("Pause");
-        hbox.append(&pause_button);
+        hbox.pack_start(&pause_button, false, false, 0);
 
         let teardown_button = gtk::Button::with_label("Teardown");
-        hbox.append(&teardown_button);
+        hbox.pack_start(&teardown_button, false, false, 0);
 
-        vbox.append(&hbox);
-        vbox.append(&label);
+        vbox.pack_start(&hbox, false, false, 0);
+        vbox.pack_start(&label, false, false, 0);
 
         window.set_child(Some(&vbox));
 

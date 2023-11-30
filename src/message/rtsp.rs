@@ -4,6 +4,8 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::o_node::neighbour::Neighbour;
+
 #[derive(Error, Debug, Clone)]
 pub enum RtpParsingError {
     #[error("Invalid format")]
@@ -12,8 +14,9 @@ pub enum RtpParsingError {
     InvalidRequestType(String),
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum RequestType {
+    #[default]
     Setup,
     Play,
     Pause,
@@ -101,12 +104,13 @@ impl fmt::Display for RtspResponse {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RtspRequest {
     request_type: RequestType,
     file_name: String,
     seq_number: u32,
     port_rtp: u16,
+    servers_to_contact: Vec<Neighbour>,
 }
 
 impl fmt::Display for RtspRequest {
@@ -131,6 +135,23 @@ impl RtspRequest {
             file_name,
             seq_number,
             port_rtp,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_with_servers(
+        request_type: RequestType,
+        file_name: String,
+        seq_number: u32,
+        port_rtp: u16,
+        servers_to_contact: Vec<Neighbour>,
+    ) -> Self {
+        Self {
+            request_type,
+            file_name,
+            seq_number,
+            port_rtp,
+            servers_to_contact,
         }
     }
 
@@ -148,6 +169,10 @@ impl RtspRequest {
 
     pub fn port_rtp(&self) -> u16 {
         self.port_rtp
+    }
+    
+    pub fn next_server(&mut self) -> Option<Neighbour> {
+        return self.servers_to_contact.pop();
     }
 }
 
@@ -186,6 +211,7 @@ impl FromStr for RtspRequest {
             file_name: filename.to_string(),
             seq_number: sequence_number,
             port_rtp,
+            ..Default::default()
         });
     }
 }
