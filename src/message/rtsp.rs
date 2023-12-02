@@ -174,6 +174,10 @@ impl RtspRequest {
     pub fn next_server(&mut self) -> Option<Neighbour> {
         return self.servers_to_contact.pop();
     }
+    
+    pub fn servers_to_connect(&self) -> &Vec<Neighbour> {
+        return &self.servers_to_contact;
+    }
 }
 
 impl FromStr for RtspRequest {
