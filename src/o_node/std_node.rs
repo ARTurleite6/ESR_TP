@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::{
-    message::{answer::Answer, query::Query, query::QueryType, Message, Status},
-    o_node::{errors::VideoQueryError, NodeCreationError},
+    message::{answer::Answer, query::Query, query::{QueryType, self}, Message, Status},
+    o_node::{errors::VideoQueryError, NodeCreationError}, server::server_worker::streaming_intermediate_worker::{StreamingWorker, TransmissionChannel},
 };
 
 use super::{
@@ -18,29 +18,6 @@ use super::{
 };
 
 type ClientAddress = (IpAddr, u16);
-
-#[derive(Debug)]
-struct TransmissionChannel {
-    clients: Mutex<Vec<ClientAddress>>,
-}
-
-impl TransmissionChannel {
-    fn new(clients: Vec<ClientAddress>) -> Self {
-        Self {
-            clients: Mutex::new(clients),
-        }
-    }
-
-    fn add_client(&self, client: ClientAddress) {
-        let mut lock = self.clients.lock().unwrap();
-        lock.push(client);
-    }
-
-    fn remove_client(&self, client: ClientAddress) {
-        let mut lock = self.clients.lock().unwrap();
-        lock.retain(|&c| client != c);
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct StdNode {
@@ -80,9 +57,8 @@ impl StdNode {
 
     fn find_best_path(
         &self,
-        socket: &UdpSocket,
         message: &mut Query,
-    ) -> Result<(Answer<Vec<Neighbour>>, IpAddr), VideoQueryError> {
+    ) -> Result<(Answer<Vec<Neighbour>>, SocketAddr), VideoQueryError> {
         let neighbours: Vec<Neighbour> = self
             .neighbours
             .iter()
@@ -108,22 +84,24 @@ impl StdNode {
             .map_err(|_| VideoQueryError::ErrorDeserializingAnswer)?;
 
         drop(message_clone);
+        
+        let query_socket = UdpSocket::bind(("0.0.0.0", 0)).unwrap();
 
         for neighbour in &neighbours {
             let neighbour_addr = neighbour.address();
-            socket.send_to(&message_encode, neighbour_addr).unwrap();
+            query_socket.send_to(&message_encode, neighbour_addr).unwrap();
         }
 
         let mut answers = Vec::with_capacity(neighbours.len());
         let mut buffer = [0; 1024];
         let begin = Instant::now();
         while answers.len() < neighbours.len() && begin.elapsed().as_secs() < 2 {
-            let (n, addr) = socket.recv_from(&mut buffer).unwrap();
+            let (n, addr) = query_socket.recv_from(&mut buffer).unwrap();
 
             let message: Answer<Vec<Neighbour>> = bincode::deserialize(&buffer[..n]).unwrap();
 
             if message.status().is_ok() {
-                answers.push((message, addr.ip()));
+                answers.push((message, addr));
             }
         }
 
@@ -146,20 +124,42 @@ impl StdNode {
 
             bincode::serialize(&answer).map_err(|_| VideoQueryError::ErrorDeserializingQuery)?
         } else {
-            let (mut selected_answer, ip_addr) =
-                self.find_best_path(socket, &mut message).unwrap();
+            let (mut selected_answer, server_addr) = self.find_best_path(&mut message).unwrap();
+            dbg!(&selected_answer);
 
             selected_answer
                 .payload_mut()
-                .push(Neighbour::new_with_port(ip_addr, self.port));
+                .push(Neighbour::from(server_addr));
 
             bincode::serialize(&selected_answer)
                 .map_err(|_| VideoQueryError::ErrorDeserializingQuery)?
         };
 
         socket.send_to(&answer, addr).unwrap();
+
+        return Ok(());#[derive(Debug)]
+        struct TransmissionChannel {
+            clients: Mutex<Vec<ClientAddress>>,
+        }
         
-        return Ok(());
+        impl TransmissionChannel {
+            fn new(clients: Vec<ClientAddress>) -> Self {
+                Self {
+                    clients: Mutex::new(clients),
+                }
+            }
+        
+            fn add_client(&self, client: ClientAddress) {
+                let mut lock = self.clients.lock().unwrap();
+                lock.push(client);
+            }
+        
+            fn remove_client(&self, client: ClientAddress) {
+                let mut lock = self.clients.lock().unwrap();
+                lock.retain(|&c| client != c);
+            }
+        }
+        
     }
 }
 
@@ -186,9 +186,9 @@ impl Node for StdNode {
         let socket = UdpSocket::bind(("0.0.0.0", self.port))
             .map_err(|err| NodeCreationError::ErrorBindingSocket(err))?;
 
-        let _ = std::thread::scope::<_, Result<(), VideoQueryError>>(|s| {
+        let _ = std::thread::scope(|s| {
             println!("Standard Node listening at port {}", self.port);
-            loop {
+            s.spawn(|| loop {
                 let mut buffer = [0; 1024];
 
                 let result = socket.recv_from(&mut buffer);
@@ -196,7 +196,7 @@ impl Node for StdNode {
 
                 if let Ok((size, addr)) = result {
                     let message: Query = bincode::deserialize(&buffer[..size])
-                        .map_err(|_| VideoQueryError::ErrorDeserializingQuery)?;
+                        .map_err(|_| VideoQueryError::ErrorDeserializingQuery).expect("Error deserializing message");
                     dbg!(&message);
                     let socket_ref = &socket;
                     s.spawn(
@@ -208,7 +208,12 @@ impl Node for StdNode {
                 } else {
                     eprintln!("Error receing message, no bytes provided");
                 }
-            }
+            });
+            
+            s.spawn(|| {
+                StreamingWorker::new(self.port, &self.streaming_workers)
+                    .run();
+            });
         });
 
         return Ok(());

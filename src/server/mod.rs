@@ -5,7 +5,7 @@ use std::{
 
 mod metrics_worker;
 pub mod rp;
-mod server_worker;
+pub mod server_worker;
 pub mod transmission_channel;
 
 use crate::server::server_worker::streaming_worker::StreamingWorker;
