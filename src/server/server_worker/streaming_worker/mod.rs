@@ -12,10 +12,10 @@ use crate::{
     video::video_stream::VideoStream, server::server_worker::streaming_worker::video_stream_info::VideoStreamInfo,
 };
 
+use transmission_worker::TransmissionChannel;
+
 pub mod transmission_worker;
 pub mod video_stream_info;
-
-use transmission_worker::TransmissionWorker;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ServerState {
@@ -37,13 +37,13 @@ pub struct StreamingWorker<'a> {
     rtsp_socket: TcpStream,
     server_state: ServerState,
     client_info: Option<ClientInfo>,
-    video_workers: &'a Mutex<HashMap<String, Arc<TransmissionWorker>>>,
+    video_workers: &'a Mutex<HashMap<String, Arc<TransmissionChannel>>>,
 }
 
 impl<'a> StreamingWorker<'a> {
     pub fn new(
         rtsp_socket: TcpStream,
-        video_workers: &'a Mutex<HashMap<String, Arc<TransmissionWorker>>>,
+        video_workers: &'a Mutex<HashMap<String, Arc<TransmissionChannel>>>,
     ) -> Self {
         Self {
             rtsp_socket,
@@ -77,7 +77,7 @@ impl<'a> StreamingWorker<'a> {
 
             lock.insert(
                 video_file.to_string(),
-                Arc::new(TransmissionWorker::new(rtp_socket, video_info)),
+                Arc::new(TransmissionChannel::new(rtp_socket, video_info)),
             );
 
             let worker = lock.get(video_file).unwrap();

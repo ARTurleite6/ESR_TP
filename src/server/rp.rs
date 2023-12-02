@@ -18,7 +18,7 @@ use crate::{
     o_node::neighbour::Neighbour,
 };
 
-use super::server_worker::streaming_intermediate_worker::{StreamingWorker, TransmissionChannel};
+use super::{server_worker::streaming_intermediate_worker::StreamingWorker, transmission_channel::TransmissionChannel};
 
 #[derive(Debug, Parser)]
 pub struct RPArgs {
