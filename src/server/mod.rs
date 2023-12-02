@@ -10,14 +10,14 @@ pub mod transmission_channel;
 
 use crate::server::server_worker::streaming_worker::StreamingWorker;
 
-use self::server_worker::streaming_worker::transmission_worker::TransmissionWorker;
+use self::server_worker::streaming_worker::transmission_worker::TransmissionChannel;
 
 #[derive(Debug, Default)]
 pub struct Server {
     metrics_port: u16,
     streaming_port: u16,
     files_available: Vec<String>,
-    video_workers: Mutex<HashMap<String, Arc<TransmissionWorker>>>,
+    video_workers: Mutex<HashMap<String, Arc<TransmissionChannel>>>,
 }
 
 impl Server {

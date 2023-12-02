@@ -38,20 +38,18 @@ impl StreamingWorker<'_> {
             dbg!(&message);
             dbg!(&stream);
 
-            match message.request_type() {
-                RequestType::Setup => {
-                    self.process_setup(&mut stream, message);
-                }
-                RequestType::Play => {
-                    self.process_play(&mut stream, message);
-                }
-                RequestType::Teardown => {}
+            let answer = match message.request_type() {
+                RequestType::Setup => self.process_setup(&mut stream, message),
+                RequestType::Play => self.process_play(&mut stream, message),
+                RequestType::Teardown => todo!(),
                 _ => todo!(),
-            }
+            };
+
+            stream.write(&answer).unwrap();
         }
     }
 
-    fn process_play(&self, stream: &mut TcpStream, request: RtspRequest) {
+    fn process_play(&self, stream: &mut TcpStream, request: RtspRequest) -> Vec<u8> {
         let mut lock_guard = self.transmission_workers.lock().unwrap();
 
         let transmission_worker = lock_guard
@@ -73,7 +71,7 @@ impl StreamingWorker<'_> {
                 request.seq_number(),
                 request.seq_number(),
             );
-            stream.write(&bincode::serialize(&answer).unwrap()).unwrap();
+            return bincode::serialize(&answer).unwrap();
         } else {
             transmission_worker.create_worker(address);
 
@@ -87,12 +85,11 @@ impl StreamingWorker<'_> {
             dbg!(&request);
 
             let answer = transmission_worker.send_server_request(request).unwrap();
-
-            stream.write(&answer).unwrap();
+            return answer;
         }
     }
 
-    fn process_setup(&self, client_stream: &mut TcpStream, mut request: RtspRequest) {
+    fn process_setup(&self, client_stream: &mut TcpStream, mut request: RtspRequest) -> Vec<u8> {
         let mut lock_guard = self.transmission_workers.lock().unwrap();
 
         let channel = lock_guard.get_mut(request.file_request());
@@ -109,11 +106,8 @@ impl StreamingWorker<'_> {
                 request.seq_number(),
             );
 
-            client_stream
-                .write(&bincode::serialize(&answer).unwrap())
-                .unwrap();
-
             dbg!(&channel);
+            return bincode::serialize(&answer).unwrap();
         } else {
             let server_to_contact = request.next_server().expect("Expected server to contact");
             dbg!(&server_to_contact);
@@ -134,20 +128,14 @@ impl StreamingWorker<'_> {
                 request.servers_to_connect().clone(),
             );
 
-            let mut channel = TransmissionChannel::with_server(
-                server_stream,
-                udp_socket,
-                vec![client_info],
-                None,
-            );
+            let mut channel =
+                TransmissionChannel::new(server_stream, udp_socket, vec![client_info]);
 
             let answer = channel.send_server_request(request_server).unwrap();
-
-            client_stream.write(&answer).unwrap();
-
-            dbg!(&channel);
-
             lock_guard.insert(request.file_request().to_string(), channel);
+            drop(lock_guard);
+
+            return answer;
         }
     }
 

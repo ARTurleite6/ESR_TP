@@ -7,12 +7,12 @@ use std::{
 use super::video_stream_info::VideoStreamInfo;
 
 #[derive(Debug)]
-pub struct TransmissionWorker {
+pub struct TransmissionChannel {
     rtp_socket: Arc<UdpSocket>,
     video_client_addrs: Arc<VideoStreamInfo>,
 }
 
-impl TransmissionWorker {
+impl TransmissionChannel {
     pub fn new(rtp_socket: Arc<UdpSocket>, video_client_addrs: Arc<VideoStreamInfo>) -> Self {
         Self {
             rtp_socket,

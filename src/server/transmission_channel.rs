@@ -22,11 +22,19 @@ impl ClientInfo {
             session_id,
         }
     }
+
+    pub fn session_id(&self) -> u32 {
+        return self.session_id;
+    }
+
+    pub fn address(&self) -> &SocketAddr {
+        &self.address
+    }
 }
 
 #[derive(Debug)]
 pub struct TransmissionChannel {
-    server_stream: Option<TcpStream>,
+    server_stream: TcpStream,
     udp_socket: Arc<UdpSocket>,
     clients: Vec<ClientInfo>,
     worker: Option<Arc<TransmissionChannelWorker>>,
@@ -34,29 +42,15 @@ pub struct TransmissionChannel {
 
 impl TransmissionChannel {
     pub fn new(
-        udp_socket: Arc<UdpSocket>,
-        clients: Vec<ClientInfo>,
-        worker: Option<Arc<TransmissionChannelWorker>>,
-    ) -> Self {
-        Self {
-            server_stream: None,
-            udp_socket,
-            clients,
-            worker,
-        }
-    }
-
-    pub fn with_server(
         server_stream: TcpStream,
         udp_socket: Arc<UdpSocket>,
         clients: Vec<ClientInfo>,
-        worker: Option<Arc<TransmissionChannelWorker>>,
     ) -> Self {
         Self {
             server_stream: server_stream.into(),
             udp_socket,
             clients,
-            worker,
+            worker: None,
         }
     }
 
@@ -79,17 +73,11 @@ impl TransmissionChannel {
 
     pub fn send_server_request(&mut self, request: RtspRequest) -> std::io::Result<Vec<u8>> {
         self.server_stream
-            .as_ref()
-            .expect("Expected server connection")
             .write(&bincode::serialize(&request).unwrap())?;
 
         let mut buffer = [0; 1024];
 
-        let n = self
-            .server_stream
-            .as_ref()
-            .expect("Expected server connection")
-            .read(&mut buffer)?;
+        let n = self.server_stream.read(&mut buffer)?;
         let answer: Vec<u8> = buffer[..n].to_vec();
         return Ok(answer);
     }
