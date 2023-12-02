@@ -18,10 +18,6 @@ name = "client"
 path = "src/client_launcher.rs"
 
 [[bin]]
-name = "client_top"
-path = "src/client_top_launcher.rs"
-
-[[bin]]
 name = "rp"
 path = "src/rp_launcher.rs"
 

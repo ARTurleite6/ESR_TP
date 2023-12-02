@@ -1,4 +1,12 @@
-use std::{fs::File, io::{Read, Seek}, path::Path};
+use std::{
+    fs::File,
+    io::{Read, Seek},
+    path::Path,
+};
+
+use crate::message::rtp::RtpPacketBuilder;
+
+const PACKET_TYPE: u8 = 26;
 
 #[derive(Debug)]
 pub struct VideoStream {
@@ -21,6 +29,26 @@ impl VideoStream {
         };
     }
 
+    pub fn receive_next_packet(&mut self) -> std::io::Result<Vec<u8>> {
+        let data = self.next_frame()?;
+        let frame_number = self.frame_num();
+
+        let packet = RtpPacketBuilder::new(&data, PACKET_TYPE)
+            .sequence_number(frame_number as u16)
+            .build();
+
+        let encode = packet.transmit_data();
+
+        let size = encode.len() as u64;
+
+        let size_encoded = bincode::serialize(&size).expect("Error serializing size");
+
+        let mut encoded = size_encoded;
+        encoded.extend(encode);
+
+        return Ok(encoded);
+    }
+
     fn loop_file(&mut self) {
         let current_position = self.file.seek(std::io::SeekFrom::Current(0)).unwrap();
         if current_position == self.file_size {
@@ -29,7 +57,6 @@ impl VideoStream {
     }
 
     pub fn next_frame(&mut self) -> std::io::Result<Vec<u8>> {
-
         self.loop_file();
 
         let mut buffer = [0; 5];

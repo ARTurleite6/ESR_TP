@@ -3,7 +3,7 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{message::rtp::RtpPacketBuilder, video::video_stream::VideoStream};
+use crate::video::video_stream::VideoStream;
 
 #[derive(Debug)]
 pub struct VideoStreamInfo {
@@ -21,27 +21,11 @@ impl VideoStreamInfo {
 
     pub fn send_data(&self, rtp_socket: &UdpSocket) -> std::io::Result<()> {
         let mut video_lock = self.video_stream.lock().unwrap();
-        let data = video_lock.next_frame()?;
-        let frame_number = video_lock.frame_num();
-
-        drop(video_lock);
-
-        let packet = RtpPacketBuilder::new(&data, 26)
-            .sequence_number(frame_number as u16)
-            .build();
-
-        let encode = packet.transmit_data();
-
-        let size = encode.len() as u64;
-
-        let size_encoded = bincode::serialize(&size).expect("Error serializing size");
-
-        let mut encoded = size_encoded;
-        encoded.extend(encode);
+        let packet = video_lock.receive_next_packet()?;
 
         for client in self.clients.lock().unwrap().iter() {
             dbg!(client);
-            let n = rtp_socket.send_to(&encoded, client).unwrap();
+            let n = rtp_socket.send_to(&packet, client).unwrap();
             dbg!(n);
         }
 
