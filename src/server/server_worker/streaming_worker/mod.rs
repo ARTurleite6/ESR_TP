@@ -75,6 +75,7 @@ impl<'a> StreamingWorker<'a> {
 
             let rtp_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").expect("Error binding socket"));
 
+
             let worker = Arc::new(TransmissionChannel::new(rtp_socket, video_info));
             dbg!(&worker);
 

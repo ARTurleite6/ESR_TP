@@ -75,6 +75,7 @@ impl StreamingWorker<'_> {
             );
             return bincode::serialize(&answer).unwrap();
         } else {
+
             let request = RtspRequest::new(
                 RequestType::Play,
                 request.file_request().to_string(),
@@ -90,6 +91,7 @@ impl StreamingWorker<'_> {
             }
 
             transmission_worker.create_worker(address);
+
             return answer;
         }
     }
@@ -105,6 +107,7 @@ impl StreamingWorker<'_> {
             channel.add_client_to_room(ClientInfo::new(
                 SocketAddr::new(client_stream.peer_addr().unwrap().ip(), request.port_rtp()),
                 session_id,
+
             ));
 
             let answer = RtspResponse::new(
@@ -126,6 +129,7 @@ impl StreamingWorker<'_> {
 
             let mut channel = TransmissionChannel::new(server_stream, udp_socket, vec![]);
 
+
             let request_server = RtspRequest::new_with_servers(
                 RequestType::Setup,
                 request.file_request().to_string(),
@@ -133,6 +137,7 @@ impl StreamingWorker<'_> {
                 port,
                 request.servers_to_connect().clone(),
             );
+
 
             let answer = channel.send_server_request(request_server).unwrap();
 
@@ -149,6 +154,8 @@ impl StreamingWorker<'_> {
 
             channel.add_client_to_room(client_info);
 
+
+            let answer = channel.send_server_request(request_server).unwrap();
             lock_guard.insert(request.file_request().to_string(), channel);
             drop(lock_guard);
 
