@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     net::{IpAddr, TcpStream, UdpSocket},
+    path::Path,
     sync::{Arc, Mutex},
 };
 
@@ -9,7 +10,8 @@ use rand::Rng;
 
 use crate::{
     message::rtsp::{RequestType, RtspRequest, RtspResponse, Status},
-    video::video_stream::VideoStream, server::server_worker::streaming_worker::video_stream_info::VideoStreamInfo,
+    server::server_worker::streaming_worker::video_stream_info::VideoStreamInfo,
+    video::video_stream::VideoStream,
 };
 
 use transmission_worker::TransmissionChannel;
@@ -30,7 +32,6 @@ struct ClientInfo {
     rtp_port: u16,
     session_id: u32,
 }
-
 
 #[derive(Debug)]
 pub struct StreamingWorker<'a> {
@@ -53,7 +54,7 @@ impl<'a> StreamingWorker<'a> {
         }
     }
 
-    fn handle_client(&mut self, video_file: &str) {
+    fn handle_client(&mut self, video_file: &str) -> std::io::Result<()> {
         let mut lock = self.video_workers.lock().unwrap();
 
         let worker = lock.get(video_file);
@@ -62,25 +63,20 @@ impl<'a> StreamingWorker<'a> {
         let address = (client_info.ip_address, client_info.rtp_port);
 
         if let Some(worker) = worker {
-            worker
-                .add_client(address);
+            worker.add_client(address);
         } else {
             let addresses = vec![address];
 
-            let stream = VideoStream::new(video_file);
+            let stream = VideoStream::new(video_file)?;
 
             let video_info = Arc::new(VideoStreamInfo::new(stream, addresses));
 
             dbg!(&video_info);
 
-            let rtp_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
+            let rtp_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").expect("Error binding socket"));
 
-            lock.insert(
-                video_file.to_string(),
-                Arc::new(TransmissionChannel::new(rtp_socket, video_info)),
-            );
 
-            let worker = lock.get(video_file).unwrap();
+            let worker = Arc::new(TransmissionChannel::new(rtp_socket, video_info));
             dbg!(&worker);
 
             let worker_clone = Arc::clone(&worker);
@@ -88,7 +84,14 @@ impl<'a> StreamingWorker<'a> {
             std::thread::spawn(move || {
                 worker_clone.run();
             });
+
+            lock.insert(video_file.to_string(), worker);
         }
+        Ok(())
+    }
+
+    fn validate_file(file: &str) -> bool {
+        return Path::new(file).exists();
     }
 
     fn process_rtsp_request(&mut self, request: RtspRequest) {
@@ -107,6 +110,19 @@ impl<'a> StreamingWorker<'a> {
                         session_id,
                     });
 
+                    if !Self::validate_file(request.file_request()) {
+                        let response = RtspResponse::new(
+                            Status::FileNotFound,
+                            request.seq_number(),
+                            session_id,
+                        );
+
+                        self.reply_rtsp(response);
+
+                        self.client_info = None;
+                        return;
+                    }
+
                     let response = RtspResponse::new(Status::Ok, request.seq_number(), session_id);
 
                     self.server_state = ServerState::Ready;
@@ -122,13 +138,10 @@ impl<'a> StreamingWorker<'a> {
             RequestType::Teardown => {
                 println!("Processing teardown");
 
-                let response = RtspResponse::new(
-                    Status::Ok,
-                    request.seq_number(),
-                    self.client_info.as_ref().unwrap().session_id,
-                );
-
                 let client_info = self.client_info.as_ref().unwrap();
+
+                let response =
+                    RtspResponse::new(Status::Ok, request.seq_number(), client_info.session_id);
 
                 let address = (client_info.ip_address, client_info.rtp_port);
 
@@ -156,7 +169,13 @@ impl<'a> StreamingWorker<'a> {
 
         self.server_state = ServerState::Playing;
 
-        self.handle_client(request.file_request());
+        if self.handle_client(request.file_request()).is_err() {
+            let response =
+                RtspResponse::new(Status::ConnectionError, request.seq_number(), session_id);
+
+            self.reply_rtsp(response);
+            return;
+        }
 
         let response = RtspResponse::new(Status::Ok, request.seq_number(), session_id);
 

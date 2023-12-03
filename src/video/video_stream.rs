@@ -16,17 +16,37 @@ pub struct VideoStream {
 }
 
 impl VideoStream {
-    pub fn new<P: AsRef<Path>>(file_name: P) -> Self {
-        let file = File::open(file_name).expect("Error opening file");
+    pub fn new<P: AsRef<Path>>(file_name: P) -> std::io::Result<Self> {
+        let file = File::open(file_name)?;
 
-        let metadata = file.metadata().unwrap();
+        let metadata = file.metadata()?;
         let file_size = metadata.len();
 
-        return Self {
+        return Ok(Self {
             file,
             frame_num: 0,
             file_size,
-        };
+        });
+    }
+
+    pub fn receive_next_packet(&mut self) -> std::io::Result<Vec<u8>> {
+        let data = self.next_frame()?;
+        let frame_number = self.frame_num();
+
+        let packet = RtpPacketBuilder::new(&data, PACKET_TYPE)
+            .sequence_number(frame_number as u16)
+            .build();
+
+        let encode = packet.transmit_data();
+
+        let size = encode.len() as u64;
+
+        let size_encoded = bincode::serialize(&size).expect("Error serializing size");
+
+        let mut encoded = size_encoded;
+        encoded.extend(encode);
+
+        return Ok(encoded);
     }
 
     pub fn receive_next_packet(&mut self) -> std::io::Result<Vec<u8>> {

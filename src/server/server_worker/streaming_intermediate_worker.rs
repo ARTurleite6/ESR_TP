@@ -5,6 +5,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use rand::Rng;
+
 use crate::{
     message::rtsp::{RequestType, RtspRequest, RtspResponse},
     server::transmission_channel::{ClientInfo, TransmissionChannel},
@@ -73,7 +75,6 @@ impl StreamingWorker<'_> {
             );
             return bincode::serialize(&answer).unwrap();
         } else {
-            transmission_worker.create_worker(address);
 
             let request = RtspRequest::new(
                 RequestType::Play,
@@ -82,9 +83,15 @@ impl StreamingWorker<'_> {
                 port,
             );
 
-            dbg!(&request);
-
             let answer = transmission_worker.send_server_request(request).unwrap();
+            let answer_decode: RtspResponse = bincode::deserialize(&answer).unwrap();
+
+            if !answer_decode.succeded() {
+                return answer;
+            }
+
+            transmission_worker.create_worker(address);
+
             return answer;
         }
     }
@@ -95,9 +102,12 @@ impl StreamingWorker<'_> {
         let channel = lock_guard.get_mut(request.file_request());
 
         if let Some(channel) = channel {
+            let session_id = rand::thread_rng().gen();
+
             channel.add_client_to_room(ClientInfo::new(
                 SocketAddr::new(client_stream.peer_addr().unwrap().ip(), request.port_rtp()),
-                request.seq_number(),
+                session_id,
+
             ));
 
             let answer = RtspResponse::new(
@@ -115,21 +125,35 @@ impl StreamingWorker<'_> {
 
             let udp_socket = Arc::new(UdpSocket::bind(("0.0.0.0", 0)).unwrap());
 
-            let client_info = ClientInfo::new(
-                SocketAddr::new(client_stream.peer_addr().unwrap().ip(), request.port_rtp()),
-                request.seq_number(),
-            );
+            let port = udp_socket.local_addr().unwrap().port();
+
+            let mut channel = TransmissionChannel::new(server_stream, udp_socket, vec![]);
+
 
             let request_server = RtspRequest::new_with_servers(
                 RequestType::Setup,
                 request.file_request().to_string(),
                 request.seq_number(),
-                udp_socket.local_addr().unwrap().port(),
+                port,
                 request.servers_to_connect().clone(),
             );
 
-            let mut channel =
-                TransmissionChannel::new(server_stream, udp_socket, vec![client_info]);
+
+            let answer = channel.send_server_request(request_server).unwrap();
+
+            let answer_decode: RtspResponse = bincode::deserialize(&answer).unwrap();
+
+            if !answer_decode.succeded() {
+                return answer;
+            }
+
+            let client_info = ClientInfo::new(
+                SocketAddr::new(client_stream.peer_addr().unwrap().ip(), request.port_rtp()),
+                answer_decode.session_id(),
+            );
+
+            channel.add_client_to_room(client_info);
+
 
             let answer = channel.send_server_request(request_server).unwrap();
             lock_guard.insert(request.file_request().to_string(), channel);

@@ -96,7 +96,7 @@ impl VideoPlayer {
 
         let mut file = std::fs::File::create(&path).expect("Error creating file");
 
-        let size = file.write_all(video).expect("Error writing to cache");
+        file.write_all(video).expect("Error writing to cache");
 
         return path;
     }
@@ -117,7 +117,6 @@ impl VideoPlayer {
     fn register_callbacks(
         client: Arc<RwLock<Client>>,
         widgets: Rc<VideoWidgets>,
-        window: &ApplicationWindow,
     ) {
         VideoPlayer::register_callback(&client, &widgets, Message::Setup, widgets.setup_button());
         VideoPlayer::register_callback(&client, &widgets, Message::Play, widgets.play_button());
@@ -142,7 +141,7 @@ impl VideoPlayer {
             let client = Arc::new(RwLock::new(Client::from_init(&init)));
             dbg!(&client);
 
-            Self::register_callbacks(client, widgets, &window);
+            Self::register_callbacks(client, widgets);
 
             window.show_all();
         });
@@ -154,7 +153,7 @@ impl VideoPlayer {
     ) -> Result<(), RequestError> {
         let mut lock = client.write().unwrap();
 
-        let answer = lock.make_request(message::rtsp::RequestType::Play, 0)?;
+        let answer = lock.make_request(message::rtsp::RequestType::Play)?;
 
         let session_id = lock.session_id();
         drop(lock);
