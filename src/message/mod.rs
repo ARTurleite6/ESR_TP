@@ -19,6 +19,7 @@ pub enum Status {
     #[default]
     Ok,
     Error,
+    VideoNotFound,
     Query,
 }
 

@@ -5,12 +5,17 @@ use std::{
 
 use thiserror::Error;
 
-use crate::{message::{
-    self,
-    query::Query,
-    rtp::RtpPacket,
-    rtsp::{RequestType, RtspRequest, RtspResponse}, answer::Answer, Message,
-}, o_node::neighbour::Neighbour};
+use crate::{
+    message::{
+        self,
+        answer::Answer,
+        query::Query,
+        rtp::RtpPacket,
+        rtsp::{RequestType, RtspRequest, RtspResponse},
+        Message,
+    },
+    o_node::neighbour::Neighbour,
+};
 
 use super::{Args, VideoPlayerComponent};
 
@@ -68,11 +73,7 @@ impl Client {
         }
     }
 
-    pub fn make_request(
-        &mut self,
-        request: RequestType,
-        seq_number: u32,
-    ) -> Result<RtspResponse, RequestError> {
+    pub fn make_request(&mut self, request: RequestType) -> Result<RtspResponse, RequestError> {
         let server_connection =
             self.server_connection
                 .as_mut()
@@ -80,8 +81,16 @@ impl Client {
                     "You must setup connection first".to_string(),
                 ))?;
 
-        let request = RtspRequest::new_with_servers(request, self.video_file.clone(), seq_number, self.rtp_port, self.servers_to_connect.clone());
-        
+        let seq_number = server_connection.sequence_number;
+
+        let request = RtspRequest::new_with_servers(
+            request,
+            self.video_file.clone(),
+            seq_number,
+            self.rtp_port,
+            self.servers_to_connect.clone(),
+        );
+
         dbg!(&request);
 
         let request = bincode::serialize(&request).expect("Error serializing packet");
@@ -89,7 +98,7 @@ impl Client {
         let tcp_socket = &mut server_connection.server_socket;
 
         let n = tcp_socket.write(&request).unwrap();
-        
+
         dbg!(n);
 
         let mut buffer = [0; 1024];
@@ -151,20 +160,24 @@ impl Client {
         Ok(())
     }
 
-    pub fn find_video(&self, udp_socket: &UdpSocket) -> Result<Answer<Vec<Neighbour>>, RequestError> {
-
+    pub fn find_video(
+        &self,
+        udp_socket: &UdpSocket,
+    ) -> Result<Answer<Vec<Neighbour>>, RequestError> {
         let query = Query::new_file_query(&self.video_file, None);
 
         let query_encode = bincode::serialize(&query).unwrap();
 
         dbg!(&(self.server_name.as_str(), self.server_port));
-        let n = udp_socket.send_to(&query_encode, (self.server_name.as_str(), self.server_port)).unwrap();
+        let n = udp_socket
+            .send_to(&query_encode, (self.server_name.as_str(), self.server_port))
+            .unwrap();
         dbg!(n);
 
         let mut buffer = [0; 1024];
         let n = udp_socket.recv(&mut buffer).unwrap();
         let answer = bincode::deserialize(&buffer[..n]).unwrap();
-        
+
         dbg!(&answer);
 
         return Ok(answer);
@@ -191,7 +204,7 @@ impl Client {
             self.video_file.clone(),
             seq_number,
             self.rtp_port,
-            servers_to_connect.clone()
+            servers_to_connect.clone(),
         );
 
         let server_socket = TcpStream::connect((self.server_name.as_str(), self.server_port))
@@ -209,7 +222,10 @@ impl Client {
 
         let response = self.receive_rtsp_packet();
 
-        dbg!(&response);
+        if !response.succeded() {
+            self.server_connection = None;
+            return Err(RequestError::FailedRequest);
+        }
 
         self.server_connection.as_mut().unwrap().session_id = Some(response.session_id());
 

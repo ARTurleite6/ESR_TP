@@ -18,7 +18,10 @@ use crate::{
     o_node::neighbour::Neighbour,
 };
 
-use super::{server_worker::streaming_intermediate_worker::StreamingWorker, transmission_channel::TransmissionChannel};
+use super::{
+    server_worker::streaming_intermediate_worker::StreamingWorker,
+    transmission_channel::TransmissionChannel,
+};
 
 #[derive(Debug, Parser)]
 pub struct RPArgs {
@@ -63,10 +66,13 @@ impl RP {
 
             let query: Query = bincode::deserialize(message).unwrap();
 
-            let video = query.query_file().expect("Expected file on query");
+            let video = query
+                .query_file()
+                .expect("Expected file on query")
+                .to_string();
 
             let workers = self.transmission_workers.lock().unwrap();
-            if workers.contains_key(video) {
+            if workers.contains_key(&video) {
                 let answer: Answer<Vec<Neighbour>> =
                     Answer::from_message(query, Vec::new(), Status::Ok);
 
@@ -103,14 +109,14 @@ impl RP {
                     count += 1;
                 }
 
-                let server_to_use = answers
-                    .into_iter()
-                    .nth(0)
-                    .expect("Expected server to use")
-                    .1;
+                let server_to_use = answers.into_iter().nth(0);
 
-                let answer =
-                    Answer::from_message(query, vec![Neighbour::from(server_to_use)], Status::Ok);
+                let answer = if let Some(server) = server_to_use {
+                    let server_to_use = server.1;
+                    Answer::from_message(query, vec![Neighbour::from(server_to_use)], Status::Ok)
+                } else {
+                    Answer::from_message(query, vec![], Status::VideoNotFound)
+                };
 
                 let answer = bincode::serialize(&answer).expect("Error serializing packet");
 

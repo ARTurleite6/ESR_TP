@@ -1,4 +1,4 @@
-use rand::{Rng, thread_rng};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::o_node::neighbour::Neighbour;
@@ -8,14 +8,14 @@ use super::{Message, Status};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FileQuery {
     file: String,
-    already_asked: Vec<Neighbour>
+    already_asked: Vec<Neighbour>,
 }
 
 impl FileQuery {
     pub fn new(file: &str, already_asked: Vec<Neighbour>) -> Self {
         Self {
             file: file.to_string(),
-            already_asked
+            already_asked,
         }
     }
 
@@ -30,7 +30,7 @@ impl FileQuery {
     pub fn add_neighbour(&mut self, neighbour: Neighbour) {
         self.already_asked.push(neighbour);
     }
-    
+
     pub fn add_neighbours(&mut self, neighbours: &[Neighbour]) {
         self.already_asked.extend_from_slice(neighbours);
     }
@@ -51,14 +51,14 @@ impl QueryType {
     pub fn file_query(&self) -> Option<&FileQuery> {
         match self {
             Self::File(args) => Some(&args),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn file_query_mut(&mut self) -> Option<&mut FileQuery> {
         match self {
             Self::File(args) => Some(args),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -113,7 +113,9 @@ impl Query {
     }
 
     pub fn query_file(&self) -> Option<&str> {
-        return self.query_type.file_query().map(|query| query.file.as_str());
+        return self
+            .query_type
+            .file_query()
+            .map(|query| query.file.as_str());
     }
 }
-

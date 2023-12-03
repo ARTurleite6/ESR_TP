@@ -16,17 +16,17 @@ pub struct VideoStream {
 }
 
 impl VideoStream {
-    pub fn new<P: AsRef<Path>>(file_name: P) -> Self {
-        let file = File::open(file_name).expect("Error opening file");
+    pub fn new<P: AsRef<Path>>(file_name: P) -> std::io::Result<Self> {
+        let file = File::open(file_name)?;
 
-        let metadata = file.metadata().unwrap();
+        let metadata = file.metadata()?;
         let file_size = metadata.len();
 
-        return Self {
+        return Ok(Self {
             file,
             frame_num: 0,
             file_size,
-        };
+        });
     }
 
     pub fn receive_next_packet(&mut self) -> std::io::Result<Vec<u8>> {
