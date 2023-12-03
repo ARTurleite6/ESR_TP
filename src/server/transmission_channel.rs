@@ -9,7 +9,7 @@ use crate::{
     video::{packet_source::PacketSource, video_stream::VideoStream},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct ClientInfo {
     address: SocketAddr,
     session_id: u32,
@@ -86,19 +86,32 @@ impl TransmissionChannel {
         self.clients.push(client);
     }
 
+    pub fn get_client_info(&self, address: SocketAddr) -> Option<ClientInfo> {
+        return self
+            .clients
+            .iter()
+            .find(|cl| cl.address == address)
+            .map(|client| client.clone());
+    }
+
     pub fn remove_client_to_room(&mut self, client: ClientInfo) {
         self.clients.retain(|cl| cl != &client);
+
+        self.remove_client_as_playable(client);
     }
 
     pub fn add_client_as_playable(&mut self, client: ClientInfo) {
-        let address = client.address;
-        self.clients.push(client);
-        self.worker.as_ref().unwrap().add_client(address);
+        self.worker.as_ref().unwrap().add_client(client.address);
     }
 
     pub fn remove_client_as_playable(&mut self, client: ClientInfo) {
-        self.clients.retain(|client| client != client);
-        self.worker.as_ref().unwrap().remove_client(client.address);
+        let worker = self.worker.as_ref().unwrap();
+
+        worker.remove_client(client.address);
+
+        if !worker.has_clients() {
+            self.worker = None;
+        }
     }
 
     pub fn has_clients(&self) -> bool {
@@ -152,6 +165,11 @@ impl TransmissionChannelWorker {
         lock.retain(|&x| x != client);
     }
 
+    pub fn has_clients(&self) -> bool {
+        let lock = self.addresses.lock().unwrap();
+        return !lock.is_empty();
+    }
+
     pub fn run(&self) {
         println!("Listening on {}", self.socket.local_addr().unwrap());
         loop {
@@ -164,7 +182,6 @@ impl TransmissionChannelWorker {
 
             if let Ok(packet) = packet {
                 let addresses = self.addresses.lock().unwrap();
-                dbg!(&addresses);
                 for client in addresses.iter() {
                     self.socket.send_to(&packet, client).unwrap();
                 }

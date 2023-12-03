@@ -79,6 +79,15 @@ impl VideoPlayer {
                 }
                 dbg!("Play");
             }
+            Message::Pause => {
+                widgets.set_label_text("State: Paused");
+                if client.write().unwrap().pause().is_err() {
+                    dbg!("Error pausing transmission");
+                    widgets.set_label_text("State: Error pausing transmission");
+                } else {
+                    widgets.set_label_text("State: Pause");
+                }
+            }
             Message::Teardown => {
                 if client.write().unwrap().stop_transmition().is_err() {
                     dbg!("Error stopping transmission");
@@ -87,7 +96,6 @@ impl VideoPlayer {
                     widgets.set_label_text("State: Idle");
                 }
             }
-            _ => todo!(),
         }
     }
 
@@ -114,12 +122,10 @@ impl VideoPlayer {
         });
     }
 
-    fn register_callbacks(
-        client: Arc<RwLock<Client>>,
-        widgets: Rc<VideoWidgets>,
-    ) {
+    fn register_callbacks(client: Arc<RwLock<Client>>, widgets: Rc<VideoWidgets>) {
         VideoPlayer::register_callback(&client, &widgets, Message::Setup, widgets.setup_button());
         VideoPlayer::register_callback(&client, &widgets, Message::Play, widgets.play_button());
+        VideoPlayer::register_callback(&client, &widgets, Message::Pause, widgets.pause_button());
         VideoPlayer::register_callback(
             &client,
             &widgets,

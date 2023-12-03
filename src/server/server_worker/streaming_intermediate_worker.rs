@@ -37,17 +37,133 @@ impl StreamingWorker<'_> {
             }
 
             let message: RtspRequest = bincode::deserialize(&buffer[..n]).unwrap();
-            dbg!(&message);
-            dbg!(&stream);
-
             let answer = match message.request_type() {
                 RequestType::Setup => self.process_setup(&mut stream, message),
                 RequestType::Play => self.process_play(&mut stream, message),
-                RequestType::Teardown => todo!(),
-                _ => todo!(),
+                RequestType::Teardown => self.process_teardown(&mut stream, message),
+                RequestType::Pause => self.process_pause(&mut stream, message),
             };
 
             stream.write(&answer).unwrap();
+        }
+    }
+
+    fn process_pause(&self, stream: &mut TcpStream, request: RtspRequest) -> Vec<u8> {
+        let mut lock_guard = self.transmission_workers.lock().unwrap();
+
+        let transmission_worker = lock_guard.get_mut(request.file_request());
+
+        if let Some(transmission_worker) = transmission_worker {
+            let client_info = transmission_worker.get_client_info(SocketAddr::new(
+                stream.peer_addr().unwrap().ip(),
+                request.port_rtp(),
+            ));
+
+            dbg!(&client_info);
+
+            if let Some(client_info) = client_info {
+                transmission_worker.remove_client_as_playable(client_info);
+
+                if !transmission_worker.has_worker() {
+                    let request_server = RtspRequest::new(
+                        RequestType::Pause,
+                        request.file_request().to_string(),
+                        request.seq_number(),
+                        transmission_worker.rtp_port(),
+                    );
+
+                    let _ = transmission_worker
+                        .send_server_request(request_server)
+                        .unwrap();
+                }
+
+                let answer = RtspResponse::new(
+                    crate::message::rtsp::Status::Ok,
+                    request.seq_number(),
+                    request.seq_number(),
+                );
+                return bincode::serialize(&answer).unwrap();
+            } else {
+                return bincode::serialize(&RtspResponse::new(
+                    crate::message::rtsp::Status::ConnectionError,
+                    request.seq_number(),
+                    request.seq_number(),
+                ))
+                .unwrap();
+            }
+        } else {
+            let answer = RtspResponse::new(
+                crate::message::rtsp::Status::ConnectionError,
+                request.seq_number(),
+                request.seq_number(),
+            );
+            return bincode::serialize(&answer).unwrap();
+        }
+    }
+
+    fn process_teardown(&self, stream: &mut TcpStream, request: RtspRequest) -> Vec<u8> {
+        let mut lock_guard = self.transmission_workers.lock().unwrap();
+
+        let transmission_worker = lock_guard.get_mut(request.file_request());
+
+        let seq_number_client = request.seq_number();
+        let file = request.file_request();
+
+        if let Some(transmission_worker) = transmission_worker {
+            let client_info = transmission_worker.get_client_info(SocketAddr::new(
+                stream.peer_addr().unwrap().ip(),
+                request.port_rtp(),
+            ));
+
+            if let Some(client_info) = client_info {
+                transmission_worker.remove_client_to_room(client_info);
+
+                if transmission_worker.has_clients() {
+                    let answer = RtspResponse::new(
+                        crate::message::rtsp::Status::Ok,
+                        request.seq_number(),
+                        request.seq_number(),
+                    );
+                    return bincode::serialize(&answer).unwrap();
+                } else {
+                    let request = RtspRequest::new(
+                        RequestType::Teardown,
+                        request.file_request().to_string(),
+                        request.seq_number(),
+                        transmission_worker.rtp_port(),
+                    );
+
+                    let answer = transmission_worker.send_server_request(request).unwrap();
+                    let answer_decode: RtspResponse = bincode::deserialize(&answer).unwrap();
+
+                    lock_guard.remove(file);
+
+                    if !answer_decode.succeded() {
+                        return answer;
+                    }
+
+                    return bincode::serialize(&RtspResponse::new(
+                        crate::message::rtsp::Status::Ok,
+                        seq_number_client,
+                        client_info.session_id(),
+                    ))
+                    .unwrap();
+                }
+            } else {
+                return bincode::serialize(&RtspResponse::new(
+                    crate::message::rtsp::Status::ConnectionError,
+                    request.seq_number(),
+                    request.seq_number(),
+                ))
+                .unwrap();
+            }
+        } else {
+            let answer = RtspResponse::new(
+                crate::message::rtsp::Status::ConnectionError,
+                request.seq_number(),
+                request.seq_number(),
+            );
+            return bincode::serialize(&answer).unwrap();
         }
     }
 
@@ -64,6 +180,8 @@ impl StreamingWorker<'_> {
             SocketAddr::new(stream.peer_addr().unwrap().ip(), request.port_rtp()),
             request.seq_number(),
         );
+        
+        dbg!(&address);
 
         if transmission_worker.has_worker() {
             transmission_worker.add_client_as_playable(address);
@@ -75,7 +193,6 @@ impl StreamingWorker<'_> {
             );
             return bincode::serialize(&answer).unwrap();
         } else {
-
             let request = RtspRequest::new(
                 RequestType::Play,
                 request.file_request().to_string(),
@@ -107,7 +224,6 @@ impl StreamingWorker<'_> {
             channel.add_client_to_room(ClientInfo::new(
                 SocketAddr::new(client_stream.peer_addr().unwrap().ip(), request.port_rtp()),
                 session_id,
-
             ));
 
             let answer = RtspResponse::new(
@@ -116,11 +232,9 @@ impl StreamingWorker<'_> {
                 request.seq_number(),
             );
 
-            dbg!(&channel);
             return bincode::serialize(&answer).unwrap();
         } else {
             let server_to_contact = request.next_server().expect("Expected server to contact");
-            dbg!(&server_to_contact);
             let server_stream = TcpStream::connect(server_to_contact.address()).unwrap();
 
             let udp_socket = Arc::new(UdpSocket::bind(("0.0.0.0", 0)).unwrap());
@@ -129,7 +243,6 @@ impl StreamingWorker<'_> {
 
             let mut channel = TransmissionChannel::new(server_stream, udp_socket, vec![]);
 
-
             let request_server = RtspRequest::new_with_servers(
                 RequestType::Setup,
                 request.file_request().to_string(),
@@ -137,7 +250,6 @@ impl StreamingWorker<'_> {
                 port,
                 request.servers_to_connect().clone(),
             );
-
 
             let answer = channel.send_server_request(request_server).unwrap();
 
@@ -154,10 +266,7 @@ impl StreamingWorker<'_> {
 
             channel.add_client_to_room(client_info);
 
-
-            let answer = channel.send_server_request(request_server).unwrap();
             lock_guard.insert(request.file_request().to_string(), channel);
-            drop(lock_guard);
 
             return answer;
         }

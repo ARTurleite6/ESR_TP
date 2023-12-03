@@ -75,7 +75,6 @@ impl<'a> StreamingWorker<'a> {
 
             let rtp_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").expect("Error binding socket"));
 
-
             let worker = Arc::new(TransmissionChannel::new(rtp_socket, video_info));
             dbg!(&worker);
 
@@ -156,8 +155,22 @@ impl<'a> StreamingWorker<'a> {
 
                 self.reply_rtsp(response);
             }
-            _ => {
-                todo!()
+            RequestType::Pause => {
+                println!("Processing Pause");
+
+                let client_info = self.client_info.as_ref().unwrap();
+
+                let response =
+                    RtspResponse::new(Status::Ok, request.seq_number(), client_info.session_id);
+
+                let address = (client_info.ip_address, client_info.rtp_port);
+
+                let lock = self.video_workers.lock().unwrap();
+
+                let worker = lock.get(request.file_request()).unwrap();
+                worker.remove_client(address);
+
+                self.reply_rtsp(response);
             }
         }
     }

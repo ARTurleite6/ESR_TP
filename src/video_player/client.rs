@@ -183,6 +183,18 @@ impl Client {
         return Ok(answer);
     }
 
+    pub fn pause(&mut self) -> Result<(), RequestError> {
+        let answer = self.make_request(RequestType::Pause)?;
+
+        if answer.succeded() {
+            self.server_connection
+                .as_mut()
+                .map(|sc| sc.stop_transmission = true);
+        }
+
+        Ok(())
+    }
+
     pub fn setup(&mut self) -> Result<(), RequestError> {
         let udp_socket =
             UdpSocket::bind(("0.0.0.0", self.rtp_port)).expect("Error binding rtp socket");
