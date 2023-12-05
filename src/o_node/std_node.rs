@@ -39,7 +39,9 @@ impl StdNode {
         }
     }
 
-    fn ask_neighbours(bootstraper_ip: String) -> Result<Answer<Vec<Neighbour>>, NodeCreationError> {
+    pub fn ask_neighbours(
+        bootstraper_ip: String,
+    ) -> Result<Answer<Vec<Neighbour>>, NodeCreationError> {
         let query = Query::new(QueryType::Neighbours, None);
 
         let mut stream = TcpStream::connect(bootstraper_ip)

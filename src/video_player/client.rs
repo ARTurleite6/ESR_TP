@@ -27,6 +27,8 @@ pub enum RequestError {
     ActionNotPossible(String),
     #[error("Error connecting to server")]
     ConnectionError,
+    #[error("Error caching video: {0}")]
+    CachingError(String),
 }
 
 #[derive(Debug)]
