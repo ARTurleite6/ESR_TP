@@ -25,8 +25,8 @@ pub enum RequestError {
     FailedRequest,
     #[error("Action Not Possible at the moment, reason: {0}")]
     ActionNotPossible(String),
-    #[error("Error connecting to server")]
-    ConnectionError,
+    #[error("Error connecting to server{0}")]
+    ConnectionError(String),
     #[error("Error caching video: {0}")]
     CachingError(String),
 }
@@ -99,30 +99,27 @@ impl Client {
 
         let tcp_socket = &mut server_connection.server_socket;
 
-        let n = tcp_socket.write(&request).unwrap();
+        let n = tcp_socket
+            .write(&request)
+            .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
         dbg!(n);
 
         let mut buffer = [0; 1024];
 
-        tcp_socket.read(&mut buffer).unwrap();
+        tcp_socket
+            .read(&mut buffer)
+            .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
         return Ok(bincode::deserialize(&buffer).expect("Error deserializing packet"));
     }
 
-    pub fn session_id(&self) -> u32 {
-        self.server_connection
-            .as_ref()
-            .expect("Expected server connection at this point")
-            .session_id
-            .expect("Expected session id at this point")
+    pub fn session_id(&self) -> Option<u32> {
+        return self.server_connection.as_ref()?.session_id;
     }
 
-    pub fn is_stopped(&self) -> bool {
-        self.server_connection
-            .as_ref()
-            .expect("Expected server connection at this point")
-            .stop_transmission
+    pub fn is_stopped(&self) -> Option<bool> {
+        return self.server_connection.as_ref()?.stop_transmission.into();
     }
 
     pub fn stop_transmition(&mut self) -> Result<(), RequestError> {
@@ -173,11 +170,13 @@ impl Client {
         dbg!(&(self.server_name.as_str(), self.server_port));
         let n = udp_socket
             .send_to(&query_encode, (self.server_name.as_str(), self.server_port))
-            .unwrap();
+            .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
         dbg!(n);
 
         let mut buffer = [0; 1024];
-        let n = udp_socket.recv(&mut buffer).unwrap();
+        let n = udp_socket
+            .recv(&mut buffer)
+            .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
         let answer = bincode::deserialize(&buffer[..n]).unwrap();
 
         dbg!(&answer);
@@ -198,16 +197,18 @@ impl Client {
     }
 
     pub fn setup(&mut self) -> Result<(), RequestError> {
-        let udp_socket =
-            UdpSocket::bind(("0.0.0.0", self.rtp_port)).expect("Error binding rtp socket");
+        let udp_socket = UdpSocket::bind(("0.0.0.0", self.rtp_port))
+            .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
-        let answer = self.find_video(&udp_socket).unwrap();
+        let answer = self.find_video(&udp_socket)?;
 
         if !answer.status().is_ok() {
             return Err(RequestError::FailedRequest);
         }
 
-        let servers_to_connect = answer.payload().unwrap();
+        let servers_to_connect = answer.payload().ok_or(RequestError::ConnectionError(
+            "Expected payload on the answer".to_string(),
+        ))?;
         self.servers_to_connect = servers_to_connect.clone();
         dbg!(&self.servers_to_connect);
 
@@ -222,7 +223,7 @@ impl Client {
         );
 
         let server_socket = TcpStream::connect((self.server_name.as_str(), self.server_port))
-            .or_else(|_| Err(RequestError::FailedRequest))?;
+            .map_err(|_| RequestError::FailedRequest)?;
 
         self.server_connection = Some(ServerConnection {
             server_socket,
@@ -241,25 +242,34 @@ impl Client {
             return Err(RequestError::FailedRequest);
         }
 
-        self.server_connection.as_mut().unwrap().session_id = Some(response.session_id());
+        self.server_connection
+            .as_mut()
+            .ok_or(RequestError::ActionNotPossible(
+                "Client must have a connection with server".to_string(),
+            ))?
+            .session_id = Some(response.session_id());
 
         return Ok(());
     }
 
-    pub fn receive_rtp_packet(&self) -> RtpPacket {
+    pub fn receive_rtp_packet(&self) -> Result<RtpPacket, RequestError> {
         let mut buffer_size = [0; 8];
 
         let udp_socket = &self
             .server_connection
             .as_ref()
-            .unwrap()
+            .ok_or(RequestError::ActionNotPossible(
+                "Client must have a connection with server".to_string(),
+            ))?
             .udp_socket
             .as_ref()
-            .expect("Error getting udp socket");
+            .ok_or(RequestError::ActionNotPossible(
+                "Client must have a connection with server".to_string(),
+            ))?;
 
-        udp_socket
-            .peek(&mut buffer_size)
-            .expect("Error geetting size of buffer");
+        udp_socket.peek(&mut buffer_size).map_err(|_| {
+            RequestError::ActionNotPossible("Client must have a connection with server".to_string())
+        })?;
 
         let size: u64 = bincode::deserialize(&buffer_size).expect("Error deserializing size");
 
@@ -271,7 +281,7 @@ impl Client {
 
         let buffer = &buffer[8..n];
 
-        return RtpPacket::decode(buffer);
+        return Ok(RtpPacket::decode(buffer));
     }
 
     fn send_rtsp_packet(&mut self, packet: RtspRequest) {

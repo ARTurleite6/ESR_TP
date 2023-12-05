@@ -193,7 +193,7 @@ impl VideoPlayer {
             return Err(RequestError::FailedRequest);
         }
 
-        let session_id = lock.session_id();
+        let session_id = lock.session_id().ok_or(RequestError::FailedRequest)?;
         drop(lock);
 
         let (tx, rx) = MainContext::channel(gtk::glib::Priority::DEFAULT);
@@ -202,14 +202,17 @@ impl VideoPlayer {
         thread::spawn(move || loop {
             let lock = client_clone.read().unwrap();
 
-            if lock.is_stopped() {
+            if lock
+                .is_stopped()
+                .expect("Expected client to be connected to server")
+            {
                 if let Err(error) = tx.send(None) {
                     println!("Error sending path to another channel {}", error);
                 }
                 break;
             }
 
-            let packet = lock.receive_rtp_packet();
+            let packet = lock.receive_rtp_packet().expect("Error receiving packet");
             drop(lock);
 
             let data = packet.payload();
