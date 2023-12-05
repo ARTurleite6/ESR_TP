@@ -122,7 +122,7 @@ impl Client {
         return self.server_connection.as_ref()?.stop_transmission.into();
     }
 
-    pub fn stop_transmition(&mut self) -> Result<(), RequestError> {
+    pub fn stop_transmition(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let sequence_number = self
             .server_connection
             .as_ref()
@@ -138,12 +138,12 @@ impl Client {
             self.rtp_port,
         );
 
-        self.send_rtsp_packet(message);
+        self.send_rtsp_packet(message)?;
 
-        let response = self.receive_rtsp_packet();
+        let response = self.receive_rtsp_packet()?;
 
         if !response.succeded() {
-            return Err(RequestError::FailedRequest);
+            return Err(RequestError::FailedRequest.into());
         }
 
         let server_connection =
@@ -196,14 +196,14 @@ impl Client {
         Ok(())
     }
 
-    pub fn setup(&mut self) -> Result<(), RequestError> {
+    pub fn setup(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let udp_socket = UdpSocket::bind(("0.0.0.0", self.rtp_port))
             .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
         let answer = self.find_video(&udp_socket)?;
 
         if !answer.status().is_ok() {
-            return Err(RequestError::FailedRequest);
+            return Err(RequestError::FailedRequest.into());
         }
 
         let servers_to_connect = answer.payload().ok_or(RequestError::ConnectionError(
@@ -233,13 +233,13 @@ impl Client {
             sequence_number: 1,
         });
 
-        self.send_rtsp_packet(message);
+        self.send_rtsp_packet(message)?;
 
-        let response = self.receive_rtsp_packet();
+        let response = self.receive_rtsp_packet()?;
 
         if !response.succeded() {
             self.server_connection = None;
-            return Err(RequestError::FailedRequest);
+            return Err(RequestError::FailedRequest.into());
         }
 
         self.server_connection
@@ -284,25 +284,25 @@ impl Client {
         return Ok(RtpPacket::decode(buffer));
     }
 
-    fn send_rtsp_packet(&mut self, packet: RtspRequest) {
-        self.server_connection
+    fn send_rtsp_packet(&mut self, packet: RtspRequest) -> std::io::Result<()> {
+        return self
+            .server_connection
             .as_mut()
             .unwrap()
             .server_socket
-            .write_all(&bincode::serialize(&packet).expect("Error serializing packet"))
-            .expect("Error sending packet to server");
+            .write_all(&bincode::serialize(&packet).expect("Error serializing packet"));
     }
 
-    fn receive_rtsp_packet(&mut self) -> RtspResponse {
+    fn receive_rtsp_packet(&mut self) -> std::io::Result<RtspResponse> {
         let mut buffer = [0; 1024];
 
-        self.server_connection
+        let n = self
+            .server_connection
             .as_mut()
             .unwrap()
             .server_socket
-            .read(&mut buffer)
-            .expect("Error receiving packet from server");
+            .read(&mut buffer)?;
 
-        return bincode::deserialize(&buffer).expect("Error deserializing packet");
+        return Ok(bincode::deserialize(&buffer[..n]).expect("Error deserializing packet"));
     }
 }

@@ -1,4 +1,7 @@
-use std::{net::{IpAddr, SocketAddr}, str::FromStr};
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +15,7 @@ impl From<SocketAddr> for Neighbour {
     fn from(value: SocketAddr) -> Self {
         Self {
             host: value.ip(),
-            port: value.port().into(), 
+            port: value.port().into(),
         }
     }
 }
@@ -38,7 +41,7 @@ impl FromStr for Neighbour {
 
         return Ok(Neighbour {
             host: ip_addr,
-            port: port,
+            port,
         });
     }
 }
@@ -54,7 +57,7 @@ impl Neighbour {
     pub fn new_with_port(ip_address: IpAddr, port: u16) -> Self {
         Self {
             host: ip_address,
-            port: port,
+            port,
         }
     }
 

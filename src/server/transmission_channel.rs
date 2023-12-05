@@ -72,7 +72,8 @@ impl TransmissionChannel {
     }
 
     pub fn send_server_request(&mut self, request: RtspRequest) -> std::io::Result<Vec<u8>> {
-        self.server_stream
+        let _ = self
+            .server_stream
             .write(&bincode::serialize(&request).unwrap())?;
 
         let mut buffer = [0; 1024];

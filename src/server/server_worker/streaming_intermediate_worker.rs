@@ -45,7 +45,7 @@ impl StreamingWorker<'_> {
                 RequestType::Pause => self.process_pause(&mut stream, message),
             };
 
-            stream.write(&answer).unwrap();
+            let _ = stream.write(&answer).unwrap();
         }
     }
 

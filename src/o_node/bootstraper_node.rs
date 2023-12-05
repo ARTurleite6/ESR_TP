@@ -23,26 +23,33 @@ pub struct BootstraperNode {
 }
 
 impl BootstraperNode {
-    fn boostraping_service(&self, mut stream: TcpStream) {
+    fn boostraping_service(&self, mut stream: TcpStream) -> std::io::Result<()> {
         let mut buffer = [0; 1024];
 
-        stream.read(&mut buffer).unwrap();
+        let n = stream.read(&mut buffer)?;
 
-        let message: Query = bincode::deserialize(&buffer).expect("Error deserializing message");
+        let message: Query =
+            bincode::deserialize(&buffer[..n]).expect("Error deserializing message");
 
-        let ip_client = stream.peer_addr().unwrap().ip();
+        let ip_client = stream.peer_addr()?.ip();
 
-        let neighbours = self.topology.get(&ip_client).unwrap();
+        let neighbours = self
+            .topology
+            .get(&ip_client)
+            .expect("Error getting neighbours");
 
         let answer = Answer::from_message(message, neighbours.to_owned(), Status::Ok);
 
-        let _ = stream.write(&bincode::serialize(&answer).unwrap());
+        let _ = stream.write(&bincode::serialize(&answer).expect("Error serializing answer"))?;
+
+        return Ok(());
     }
 }
 
 impl Node for BootstraperNode {
-    fn from_configuration(configuration: Configuration) -> Result<Self, NodeCreationError>
-    {
+    fn from_configuration(
+        configuration: Configuration,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         if let NodeFunction::Bootstraper { ref topology, port } = configuration.node_function {
             let file = File::open(topology)
                 .map_err(|_err| NodeCreationError::InexistentTopology(topology.clone()))?;
@@ -81,14 +88,16 @@ impl Node for BootstraperNode {
                 );
 
                 for stream in socket.incoming() {
-                    self.boostraping_service(stream.unwrap());
+                    s.spawn(|| {
+                        if let Err(error) = self.boostraping_service(stream.unwrap()) {
+                            println!("Error in bootstraping service {}", error)
+                        }
+                    });
                 }
             });
 
             //std thread
-            s.spawn(|| {
-                self.std_node.run()
-            });
+            s.spawn(|| self.std_node.run());
         });
 
         Ok(())

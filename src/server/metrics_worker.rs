@@ -29,10 +29,10 @@ impl MetricsWorker {
         loop {
             let mut buffer = [0; 1024];
 
-            stream.read(&mut buffer).unwrap();
+            let n = stream.read(&mut buffer).unwrap();
             dbg!(&stream);
 
-            let metrics_request: MetricsRequest = bincode::deserialize(&buffer).unwrap();
+            let metrics_request: MetricsRequest = bincode::deserialize(&buffer[..n]).unwrap();
 
             let video_file = metrics_request.video_file();
 

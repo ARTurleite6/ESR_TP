@@ -1,9 +1,11 @@
-use gtk::{Image, ApplicationWindow, prelude::{BoxExt, ContainerExt, LabelExt, ImageExt}};
+use gtk::{
+    prelude::{BoxExt, ContainerExt, ImageExt, LabelExt},
+    ApplicationWindow, Image,
+};
 
 pub struct VideoWidgets {
     play_button: gtk::Button,
     setup_button: gtk::Button,
-    pause_button: gtk::Button,
     teardown_button: gtk::Button,
     image_widget: Image,
     label: gtk::Label,
@@ -27,9 +29,6 @@ impl VideoWidgets {
         let setup_button = gtk::Button::with_label("Setup");
         hbox.pack_start(&setup_button, false, false, 0);
 
-        let pause_button = gtk::Button::with_label("Pause");
-        hbox.pack_start(&pause_button, false, false, 0);
-
         let teardown_button = gtk::Button::with_label("Teardown");
         hbox.pack_start(&teardown_button, false, false, 0);
 
@@ -42,7 +41,6 @@ impl VideoWidgets {
             image_widget: image,
             play_button,
             setup_button,
-            pause_button,
             teardown_button,
             label,
         }
@@ -58,10 +56,6 @@ impl VideoWidgets {
 
     pub fn teardown_button(&self) -> &gtk::Button {
         &self.teardown_button
-    }
-
-    pub fn pause_button(&self) -> &gtk::Button {
-        &self.pause_button
     }
 
     pub fn set_label_text(&self, text: &str) {

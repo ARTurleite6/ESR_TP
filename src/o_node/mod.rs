@@ -2,17 +2,17 @@
 
 pub mod bootstraper_node;
 pub mod config;
-pub mod std_node;
-mod query_worker;
-pub mod neighbour;
 mod errors;
+pub mod neighbour;
+mod query_worker;
+pub mod std_node;
 
 use std::fmt::Debug;
 
 use config::{Configuration, NodeFunction};
 use thiserror::Error;
 
-use self::{bootstraper_node::BootstraperNode, std_node::StdNode, neighbour::Neighbour};
+use self::{bootstraper_node::BootstraperNode, neighbour::Neighbour, std_node::StdNode};
 
 #[derive(Debug, Error)]
 pub enum NodeCreationError {
@@ -26,7 +26,9 @@ pub enum NodeCreationError {
     ErrorDeserializingIpAddresses(bincode::Error),
 }
 
-pub fn create_node(configuration: Configuration) -> Result<Box<dyn Node>, NodeCreationError> {
+pub fn create_node(
+    configuration: Configuration,
+) -> Result<Box<dyn Node>, Box<dyn std::error::Error>> {
     match configuration.node_function {
         NodeFunction::Bootstraper { .. } => BootstraperNode::from_configuration(configuration)
             .map(|node| Box::new(node) as Box<dyn Node>),
@@ -37,7 +39,7 @@ pub fn create_node(configuration: Configuration) -> Result<Box<dyn Node>, NodeCr
 }
 
 pub trait Node: Debug {
-    fn from_configuration(configuration: Configuration) -> Result<Self, NodeCreationError>
+    fn from_configuration(configuration: Configuration) -> Result<Self, Box<dyn std::error::Error>>
     where
         Self: Sized;
 

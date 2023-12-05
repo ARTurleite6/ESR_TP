@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod client;
 mod video_widgets;
 
@@ -17,8 +15,8 @@ use crate::message;
 use self::client::{Client, RequestError};
 use self::video_widgets::VideoWidgets;
 
-const CACHE_DIRECTORY: &'static str = "tmp";
-const CACHE_EXTENSION: &'static str = "Mjpeg";
+const CACHE_DIRECTORY: &str = "tmp";
+const CACHE_EXTENSION: &str = "Mjpeg";
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -43,7 +41,6 @@ pub struct VideoPlayer;
 #[derive(Debug, Clone, Copy)]
 enum VideoPlayerAction {
     Play,
-    Pause,
     Setup,
     Teardown,
 }
@@ -82,20 +79,6 @@ impl VideoPlayer {
                     widgets.set_label_text("State: Idle (Error playing video)");
                 }
                 dbg!("Play");
-            }
-            VideoPlayerAction::Pause => {
-                widgets.set_label_text("State: Paused");
-                if client
-                    .write()
-                    .expect("Error acquiring the client's writing lock")
-                    .pause()
-                    .is_err()
-                {
-                    dbg!("Error pausing transmission");
-                    widgets.set_label_text("State: Error pausing transmission");
-                } else {
-                    widgets.set_label_text("State: Pause");
-                }
             }
             VideoPlayerAction::Teardown => {
                 if client
@@ -148,12 +131,6 @@ impl VideoPlayer {
             &widgets,
             VideoPlayerAction::Play,
             widgets.play_button(),
-        );
-        VideoPlayer::register_callback(
-            &client,
-            &widgets,
-            VideoPlayerAction::Pause,
-            widgets.pause_button(),
         );
         VideoPlayer::register_callback(
             &client,

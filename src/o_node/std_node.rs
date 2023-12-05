@@ -41,7 +41,7 @@ impl StdNode {
 
     pub fn ask_neighbours(
         bootstraper_ip: String,
-    ) -> Result<Answer<Vec<Neighbour>>, NodeCreationError> {
+    ) -> Result<Answer<Vec<Neighbour>>, Box<dyn std::error::Error>> {
         let query = Query::new(QueryType::Neighbours, None);
 
         let mut stream = TcpStream::connect(bootstraper_ip)
@@ -53,9 +53,9 @@ impl StdNode {
 
         let mut buffer = [0; 1024];
 
-        stream.read(&mut buffer).unwrap();
+        let n = stream.read(&mut buffer)?;
 
-        let answer: Answer<Vec<Neighbour>> = bincode::deserialize(&buffer)
+        let answer: Answer<Vec<Neighbour>> = bincode::deserialize(&buffer[..n])
             .map_err(|err| NodeCreationError::ErrorDeserializingIpAddresses(err))?;
 
         return Ok(answer);
@@ -136,13 +136,14 @@ impl StdNode {
         let transmits_file = self
             .streaming_workers
             .lock()
-            .unwrap()
+            .expect("Error acquiring lock")
             .contains_key(message.query_type().file_query().unwrap().file());
 
         let answer = if transmits_file {
             let answer = Answer::<Vec<Neighbour>>::from_message(message, Vec::new(), Status::Ok);
 
-            bincode::serialize(&answer).map_err(|_| VideoQueryError::ErrorDeserializingQuery)?
+            bincode::serialize(&answer)
+                .map_err(|_| VideoQueryError::ErrorDeserializingQuery.into())?
         } else {
             let (mut selected_answer, server_addr) = self.find_best_path(&mut message)?;
             dbg!(&selected_answer);
@@ -185,7 +186,7 @@ impl StdNode {
 }
 
 impl Node for StdNode {
-    fn from_configuration(configuration: Configuration) -> Result<Self, NodeCreationError>
+    fn from_configuration(configuration: Configuration) -> Result<Self, Box<dyn std::error::Error>>
     where
         Self: Sized,
     {
