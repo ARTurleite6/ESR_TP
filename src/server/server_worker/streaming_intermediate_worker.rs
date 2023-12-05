@@ -37,6 +37,7 @@ impl StreamingWorker<'_> {
             }
 
             let message: RtspRequest = bincode::deserialize(&buffer[..n]).unwrap();
+            dbg!(&message);
             let answer = match message.request_type() {
                 RequestType::Setup => self.process_setup(&mut stream, message),
                 RequestType::Play => self.process_play(&mut stream, message),
@@ -180,7 +181,7 @@ impl StreamingWorker<'_> {
             SocketAddr::new(stream.peer_addr().unwrap().ip(), request.port_rtp()),
             request.seq_number(),
         );
-        
+
         dbg!(&address);
 
         if transmission_worker.has_worker() {

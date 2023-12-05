@@ -3,7 +3,7 @@ use std::{
     io::{Read, Write},
     net::{TcpStream, UdpSocket},
     sync::Mutex,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use clap::Parser;
@@ -22,7 +22,6 @@ use super::{
     server_worker::streaming_intermediate_worker::StreamingWorker,
     transmission_channel::TransmissionChannel,
 };
-
 
 #[derive(Debug, Parser)]
 pub struct RPArgs {
@@ -85,13 +84,16 @@ impl RP {
                 let request = bincode::serialize(&request).expect("Error serializing packet");
 
                 for server in server_connections.iter_mut() {
-                    server.write_all(&request).unwrap();
+                    dbg!(&server);
+                    let n = server.write(&request).unwrap();
+                    dbg!(n);
                 }
 
                 let now = Instant::now();
                 let mut answers = Vec::new();
                 let mut count = 0;
-                while count < server_connections.len() && Duration::from_secs(5) > now.elapsed() {
+                dbg!(server_connections.len());
+                while count < server_connections.len() && now.elapsed().as_secs() < 5 {
                     let mut buffer = [0; 1024];
                     let n = server_connections[count].read(&mut buffer).unwrap();
                     if n == 0 {
@@ -99,6 +101,7 @@ impl RP {
                     }
                     let response: MetricsResponse =
                         bincode::deserialize(&buffer).expect("Error deserializing packet");
+                    dbg!(&response);
 
                     let neighbour = Neighbour::new_with_port(
                         server_connections[count].peer_addr().unwrap().ip(),
@@ -109,6 +112,7 @@ impl RP {
 
                     count += 1;
                 }
+                println!("Answers: {:?}", &answers);
 
                 let server_to_use = answers.into_iter().nth(0);
 
@@ -121,7 +125,10 @@ impl RP {
 
                 let answer = bincode::serialize(&answer).expect("Error serializing packet");
 
-                udp_socket.send_to(&answer, addr).unwrap();
+                dbg!((&answer, &addr));
+
+                let n = udp_socket.send_to(&answer, addr).unwrap();
+                dbg!(n);
             }
         }
     }

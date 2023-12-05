@@ -30,6 +30,7 @@ impl MetricsWorker {
             let mut buffer = [0; 1024];
 
             stream.read(&mut buffer).unwrap();
+            dbg!(&stream);
 
             let metrics_request: MetricsRequest = bincode::deserialize(&buffer).unwrap();
 
@@ -49,8 +50,10 @@ impl MetricsWorker {
             );
 
             let metrics_response = bincode::serialize(&metrics_response).unwrap();
+            dbg!(&metrics_response);
 
-            stream.write(&metrics_response).unwrap();
+            let n = stream.write(&metrics_response).unwrap();
+            dbg!(n);
         }
     }
 
@@ -58,7 +61,7 @@ impl MetricsWorker {
         std::thread::scope(|s| {
             for stream in self.metrics_listener.incoming() {
                 let stream = stream.unwrap();
-                
+
                 dbg!("New client connected to metrics socket");
 
                 s.spawn(move || self.handle_client(stream));

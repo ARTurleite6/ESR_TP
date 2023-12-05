@@ -18,7 +18,7 @@ pub enum NodeFunction {
     },
     Bootstraper {
         /// File containing topology in order to serve as boostraper for other nodes
-        topology: String,
         port: u16,
+        topology: String,
     },
 }
