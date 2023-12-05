@@ -29,19 +29,19 @@ impl VideoStreamInfo {
             dbg!(n);
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn add_client(&self, client: (IpAddr, u16)) -> usize {
         let mut lock = self.clients.lock().unwrap();
         lock.push(client);
-        return lock.len();
+        lock.len()
     }
 
     pub fn remove_client(&self, client: (IpAddr, u16)) -> usize {
         let mut lock = self.clients.lock().unwrap();
         lock.retain(|c| c != &client);
-        return lock.len();
+        lock.len()
     }
 
     pub fn has_clients(&self) -> bool {

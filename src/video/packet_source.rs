@@ -19,6 +19,6 @@ impl PacketSource for UdpSocket {
 
         let buffer = &buffer[0..n];
 
-        return Ok(buffer.into());
+        Ok(buffer.into())
     }
 }

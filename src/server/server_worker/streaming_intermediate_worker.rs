@@ -83,14 +83,14 @@ impl StreamingWorker<'_> {
                     request.seq_number(),
                     request.seq_number(),
                 );
-                return bincode::serialize(&answer).unwrap();
+                bincode::serialize(&answer).unwrap()
             } else {
-                return bincode::serialize(&RtspResponse::new(
+                bincode::serialize(&RtspResponse::new(
                     crate::message::rtsp::Status::ConnectionError,
                     request.seq_number(),
                     request.seq_number(),
                 ))
-                .unwrap();
+                .unwrap()
             }
         } else {
             let answer = RtspResponse::new(
@@ -98,7 +98,7 @@ impl StreamingWorker<'_> {
                 request.seq_number(),
                 request.seq_number(),
             );
-            return bincode::serialize(&answer).unwrap();
+            bincode::serialize(&answer).unwrap()
         }
     }
 
@@ -125,7 +125,7 @@ impl StreamingWorker<'_> {
                         request.seq_number(),
                         request.seq_number(),
                     );
-                    return bincode::serialize(&answer).unwrap();
+                    bincode::serialize(&answer).unwrap()
                 } else {
                     let request = RtspRequest::new(
                         RequestType::Teardown,
@@ -143,20 +143,20 @@ impl StreamingWorker<'_> {
                         return answer;
                     }
 
-                    return bincode::serialize(&RtspResponse::new(
+                    bincode::serialize(&RtspResponse::new(
                         crate::message::rtsp::Status::Ok,
                         seq_number_client,
                         client_info.session_id(),
                     ))
-                    .unwrap();
+                    .unwrap()
                 }
             } else {
-                return bincode::serialize(&RtspResponse::new(
+                bincode::serialize(&RtspResponse::new(
                     crate::message::rtsp::Status::ConnectionError,
                     request.seq_number(),
                     request.seq_number(),
                 ))
-                .unwrap();
+                .unwrap()
             }
         } else {
             let answer = RtspResponse::new(
@@ -164,7 +164,7 @@ impl StreamingWorker<'_> {
                 request.seq_number(),
                 request.seq_number(),
             );
-            return bincode::serialize(&answer).unwrap();
+            bincode::serialize(&answer).unwrap()
         }
     }
 
@@ -192,7 +192,7 @@ impl StreamingWorker<'_> {
                 request.seq_number(),
                 request.seq_number(),
             );
-            return bincode::serialize(&answer).unwrap();
+            bincode::serialize(&answer).unwrap()
         } else {
             let request = RtspRequest::new(
                 RequestType::Play,
@@ -210,7 +210,7 @@ impl StreamingWorker<'_> {
 
             transmission_worker.create_worker(address);
 
-            return answer;
+            answer
         }
     }
 
@@ -233,7 +233,7 @@ impl StreamingWorker<'_> {
                 request.seq_number(),
             );
 
-            return bincode::serialize(&answer).unwrap();
+            bincode::serialize(&answer).unwrap()
         } else {
             let server_to_contact = request.next_server().expect("Expected server to contact");
             let server_stream = TcpStream::connect(server_to_contact.address()).unwrap();
@@ -269,7 +269,7 @@ impl StreamingWorker<'_> {
 
             lock_guard.insert(request.file_request().to_string(), channel);
 
-            return answer;
+            answer
         }
     }
 

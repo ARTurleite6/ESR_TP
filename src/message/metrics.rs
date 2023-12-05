@@ -66,6 +66,6 @@ impl MetricsResponse {
     }
     
     pub fn streaming_port(&self) -> u16 {
-        return self.streaming_port;
+        self.streaming_port
     }
 }

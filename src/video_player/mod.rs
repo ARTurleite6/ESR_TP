@@ -48,7 +48,7 @@ enum VideoPlayerAction {
 impl VideoPlayer {
     pub fn run(init: Args) {
         let app = Application::builder()
-            .application_id(&format!("video.streamer/{}", init.rtp_port))
+            .application_id(format!("video.streamer/{}", init.rtp_port))
             .build();
 
         Self::setup(&app, init);
@@ -103,7 +103,7 @@ impl VideoPlayer {
 
         file.write_all(video)?;
 
-        return Ok(path);
+        Ok(path)
     }
 
     fn register_callback(
@@ -112,8 +112,8 @@ impl VideoPlayer {
         message: VideoPlayerAction,
         button: &gtk::Button,
     ) {
-        let client_clone = Arc::clone(&client);
-        let widgets_clone = Rc::clone(&widgets);
+        let client_clone = Arc::clone(client);
+        let widgets_clone = Rc::clone(widgets);
         button.connect_clicked(move |_| {
             Self::update(&message, &client_clone, &widgets_clone);
         });
@@ -175,7 +175,7 @@ impl VideoPlayer {
 
         let (tx, rx) = MainContext::channel(gtk::glib::Priority::DEFAULT);
 
-        let client_clone = Arc::clone(&client);
+        let client_clone = Arc::clone(client);
         thread::spawn(move || loop {
             let lock = client_clone.read().unwrap();
 
@@ -194,7 +194,7 @@ impl VideoPlayer {
 
             let data = packet.payload();
 
-            let path = VideoPlayer::store_file_cache(&data, session_id);
+            let path = VideoPlayer::store_file_cache(data, session_id);
             dbg!(&path);
             match path {
                 Ok(path) => {
@@ -207,13 +207,13 @@ impl VideoPlayer {
             }
         });
 
-        let video_widgets_clone = Rc::clone(&video_widget);
+        let video_widgets_clone = Rc::clone(video_widget);
         rx.attach(None, move |path| {
             video_widgets_clone.update_image(path.as_deref());
             while gtk::glib::MainContext::default().iteration(false) {}
-            return gtk::glib::ControlFlow::Continue;
+            gtk::glib::ControlFlow::Continue
         });
 
-        return Ok(());
+        Ok(())
     }
 }

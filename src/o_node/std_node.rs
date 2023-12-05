@@ -45,20 +45,20 @@ impl StdNode {
         let query = Query::new(QueryType::Neighbours, None);
 
         let mut stream = TcpStream::connect(bootstraper_ip)
-            .map_err(|error| NodeCreationError::ErrorConnectingBootstraper(error))?;
+            .map_err(NodeCreationError::ErrorConnectingBootstraper)?;
 
         stream
             .write(&bincode::serialize(&query).unwrap())
-            .map_err(|err| NodeCreationError::ErrorConnectingBootstraper(err))?;
+            .map_err(NodeCreationError::ErrorConnectingBootstraper)?;
 
         let mut buffer = [0; 1024];
 
         let n = stream.read(&mut buffer)?;
 
         let answer: Answer<Vec<Neighbour>> = bincode::deserialize(&buffer[..n])
-            .map_err(|err| NodeCreationError::ErrorDeserializingIpAddresses(err))?;
+            .map_err(NodeCreationError::ErrorDeserializingIpAddresses)?;
 
-        return Ok(answer);
+        Ok(answer)
     }
 
     fn find_best_path(
@@ -74,8 +74,7 @@ impl StdNode {
                     .file_query()
                     .unwrap()
                     .visited_neighbour(neighbour)
-            })
-            .map(|neigh| neigh.clone())
+            }).cloned()
             .collect();
 
         dbg!(&neighbours);
@@ -124,7 +123,7 @@ impl StdNode {
 
         query_socket.set_read_timeout(None).unwrap();
 
-        return Err(VideoQueryError::ErrorDeserializingAnswer);
+        Err(VideoQueryError::ErrorDeserializingAnswer)
     }
 
     fn handle_video_request(
@@ -143,7 +142,7 @@ impl StdNode {
             let answer = Answer::<Vec<Neighbour>>::from_message(message, Vec::new(), Status::Ok);
 
             bincode::serialize(&answer)
-                .map_err(|_| VideoQueryError::ErrorDeserializingQuery.into())?
+                .map_err(|_| VideoQueryError::ErrorDeserializingQuery)?
         } else {
             let (mut selected_answer, server_addr) = self.find_best_path(&mut message)?;
             dbg!(&selected_answer);
@@ -206,9 +205,9 @@ impl Node for StdNode {
     fn run(&self) -> Result<(), NodeCreationError> {
         dbg!(self);
         let socket = UdpSocket::bind(("0.0.0.0", self.port))
-            .map_err(|err| NodeCreationError::ErrorBindingSocket(err))?;
+            .map_err(NodeCreationError::ErrorBindingSocket)?;
 
-        let _ = std::thread::scope(|s| {
+        std::thread::scope(|s| {
             println!("Standard Node listening at port {}", self.port);
             s.spawn(|| loop {
                 let mut buffer = [0; 1024];
@@ -239,10 +238,10 @@ impl Node for StdNode {
             });
         });
 
-        return Ok(());
+        Ok(())
     }
 
     fn neighbours(&self) -> &[Neighbour] {
-        return &self.neighbours;
+        &self.neighbours
     }
 }

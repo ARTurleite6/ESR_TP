@@ -20,11 +20,11 @@ impl FileQuery {
     }
 
     pub fn file(&self) -> &str {
-        return &self.file;
+        &self.file
     }
 
     pub fn visited_neighbour(&self, neighbour: &Neighbour) -> bool {
-        return self.already_asked.contains(neighbour);
+        self.already_asked.contains(neighbour)
     }
 
     pub fn add_neighbour(&mut self, neighbour: Neighbour) {
@@ -36,7 +36,7 @@ impl FileQuery {
     }
 
     pub fn is_first_node(&self) -> bool {
-        return self.already_asked.is_empty();
+        self.already_asked.is_empty()
     }
 }
 
@@ -50,7 +50,7 @@ pub enum QueryType {
 impl QueryType {
     pub fn file_query(&self) -> Option<&FileQuery> {
         match self {
-            Self::File(args) => Some(&args),
+            Self::File(args) => Some(args),
             _ => None,
         }
     }
@@ -105,11 +105,11 @@ impl Query {
     }
 
     pub fn query_type(&self) -> &QueryType {
-        return &self.query_type;
+        &self.query_type
     }
 
     pub fn query_type_mut(&mut self) -> &mut QueryType {
-        return &mut self.query_type;
+        &mut self.query_type
     }
 
     pub fn query_file(&self) -> Option<&str> {

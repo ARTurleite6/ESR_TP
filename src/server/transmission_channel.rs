@@ -24,7 +24,7 @@ impl ClientInfo {
     }
 
     pub fn session_id(&self) -> u32 {
-        return self.session_id;
+        self.session_id
     }
 
     pub fn address(&self) -> &SocketAddr {
@@ -47,7 +47,7 @@ impl TransmissionChannel {
         clients: Vec<ClientInfo>,
     ) -> Self {
         Self {
-            server_stream: server_stream.into(),
+            server_stream,
             udp_socket,
             clients,
             worker: None,
@@ -64,7 +64,7 @@ impl TransmissionChannel {
 
         self.worker = Some(worker);
 
-        let worker_clone = Arc::clone(&self.worker.as_ref().unwrap());
+        let worker_clone = Arc::clone(self.worker.as_ref().unwrap());
 
         std::thread::spawn(move || {
             worker_clone.run();
@@ -80,7 +80,7 @@ impl TransmissionChannel {
 
         let n = self.server_stream.read(&mut buffer)?;
         let answer: Vec<u8> = buffer[..n].to_vec();
-        return Ok(answer);
+        Ok(answer)
     }
 
     pub fn add_client_to_room(&mut self, client: ClientInfo) {
@@ -91,8 +91,7 @@ impl TransmissionChannel {
         return self
             .clients
             .iter()
-            .find(|cl| cl.address == address)
-            .map(|client| client.clone());
+            .find(|cl| cl.address == address).copied();
     }
 
     pub fn remove_client_to_room(&mut self, client: ClientInfo) {
@@ -116,15 +115,15 @@ impl TransmissionChannel {
     }
 
     pub fn has_clients(&self) -> bool {
-        return !self.clients.is_empty();
+        !self.clients.is_empty()
     }
 
     pub fn has_worker(&self) -> bool {
-        return self.worker.is_some();
+        self.worker.is_some()
     }
 
     pub fn rtp_port(&self) -> u16 {
-        return self.udp_socket.local_addr().unwrap().port();
+        self.udp_socket.local_addr().unwrap().port()
     }
 }
 
@@ -168,7 +167,7 @@ impl TransmissionChannelWorker {
 
     pub fn has_clients(&self) -> bool {
         let lock = self.addresses.lock().unwrap();
-        return !lock.is_empty();
+        !lock.is_empty()
     }
 
     pub fn run(&self) {

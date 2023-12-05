@@ -22,11 +22,11 @@ impl VideoStream {
         let metadata = file.metadata()?;
         let file_size = metadata.len();
 
-        return Ok(Self {
+        Ok(Self {
             file,
             frame_num: 0,
             file_size,
-        });
+        })
     }
 
     pub fn receive_next_packet(&mut self) -> std::io::Result<Vec<u8>> {
@@ -46,11 +46,11 @@ impl VideoStream {
         let mut encoded = size_encoded;
         encoded.extend(encode);
 
-        return Ok(encoded);
+        Ok(encoded)
     }
 
     fn loop_file(&mut self) {
-        let current_position = self.file.seek(std::io::SeekFrom::Current(0)).unwrap();
+        let current_position = self.file.stream_position().unwrap();
         if current_position == self.file_size {
             self.file.seek(std::io::SeekFrom::Start(0)).unwrap();
         }
@@ -72,10 +72,10 @@ impl VideoStream {
 
         self.frame_num += 1;
 
-        return Ok(buffer);
+        Ok(buffer)
     }
 
     pub fn frame_num(&self) -> u32 {
-        return self.frame_num;
+        self.frame_num
     }
 }

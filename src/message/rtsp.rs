@@ -82,11 +82,11 @@ impl RtspResponse {
     }
 
     pub fn succeded(&self) -> bool {
-        return self.status == Status::Ok;
+        self.status == Status::Ok
     }
 
     pub fn status(&self) -> Status {
-        return self.status;
+        self.status
     }
 
     pub fn session_id(&self) -> u32 {
@@ -172,11 +172,11 @@ impl RtspRequest {
     }
     
     pub fn next_server(&mut self) -> Option<Neighbour> {
-        return self.servers_to_contact.pop();
+        self.servers_to_contact.pop()
     }
     
     pub fn servers_to_connect(&self) -> &Vec<Neighbour> {
-        return &self.servers_to_contact;
+        &self.servers_to_contact
     }
 }
 
@@ -184,7 +184,7 @@ impl FromStr for RtspRequest {
     type Err = RtpParsingError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut request = s.split("\n");
+        let mut request = s.split('\n');
 
         let mut line1 = request.next().unwrap().split(' ');
 
@@ -210,12 +210,12 @@ impl FromStr for RtspRequest {
             .parse()
             .unwrap();
 
-        return Ok(Self {
+        Ok(Self {
             request_type: request_type.parse().unwrap(),
             file_name: filename.to_string(),
             seq_number: sequence_number,
             port_rtp,
             ..Default::default()
-        });
+        })
     }
 }

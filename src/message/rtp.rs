@@ -25,7 +25,7 @@ impl RtpPacket {
         data.extend(&self.header);
         data.extend(&self.payload);
         dbg!(self.payload.len());
-        return data;
+        data
     }
 
     pub fn decode(data: &[u8]) -> Self {
@@ -38,10 +38,10 @@ impl RtpPacket {
             + 65536 * header[5] as u32
             + 16777216 * header[4] as u32;
 
-        return RtpPacketBuilder::new(&data[12..], payload_type)
+        RtpPacketBuilder::new(&data[12..], payload_type)
             .sequence_number(sequence_number as u16)
             .timestamp(time_stamp)
-            .build();
+            .build()
     }
 }
 
@@ -54,9 +54,8 @@ impl From<RtpPacketBuilder> for RtpPacket {
 
         let mut header = value.header;
 
-        header[0] =
-            (value.version << 6 | value.padding << 5 | value.extension << 4 | value.cc) as u8;
-        header[1] = (value.marker << 7 | value.payload_type & 0x000000FF) as u8;
+        header[0] = value.version << 6 | value.padding << 5 | value.extension << 4 | value.cc;
+        header[1] = value.marker << 7 | value.payload_type;
         header[2] = (sequence_number >> 8) as u8;
         header[3] = (sequence_number & 0xFF) as u8;
         header[4] = (timestamp >> 24) as u8;
@@ -134,7 +133,7 @@ impl RtpPacketBuilder {
     }
 
     pub fn build(self) -> RtpPacket {
-        return RtpPacket::from(self);
+        RtpPacket::from(self)
     }
 }
 

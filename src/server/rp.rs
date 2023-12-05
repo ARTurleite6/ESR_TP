@@ -118,7 +118,7 @@ impl RP {
 
                 let answer = if let Some(server) = server_to_use {
                     let server_to_use = server.1;
-                    Answer::from_message(query, vec![Neighbour::from(server_to_use)], Status::Ok)
+                    Answer::from_message(query, vec![server_to_use], Status::Ok)
                 } else {
                     Answer::from_message(query, vec![], Status::VideoNotFound)
                 };

@@ -15,7 +15,7 @@ impl From<SocketAddr> for Neighbour {
     fn from(value: SocketAddr) -> Self {
         Self {
             host: value.ip(),
-            port: value.port().into(),
+            port: value.port(),
         }
     }
 }
@@ -24,25 +24,24 @@ impl FromStr for Neighbour {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.split(',').collect();
+        let parts: Vec<&str> = s.split(':').collect();
 
-        if parts.len() > 2 || parts.len() < 1 {
+        if parts.len() > 2 || parts.is_empty() {
             return Err("Invalid input Format. Expected: ip_addr, port".to_string());
         }
 
         let ip_addr = IpAddr::from_str(parts[0].trim()).map_err(|err| err.to_string())?;
 
         let port = parts
-            .iter()
-            .nth(1)
+            .get(1)
             .unwrap_or(&"8000")
             .parse::<u16>()
             .map_err(|e| e.to_string())?;
 
-        return Ok(Neighbour {
+        Ok(Neighbour {
             host: ip_addr,
             port,
-        });
+        })
     }
 }
 

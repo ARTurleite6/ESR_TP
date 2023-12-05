@@ -37,15 +37,15 @@ impl TransmissionChannel {
     }
 
     pub fn add_client(&self, client: (IpAddr, u16)) -> usize {
-        return self.video_client_addrs.add_client(client)
+        self.video_client_addrs.add_client(client)
     }
 
     pub fn remove_client(&self, client: (IpAddr, u16)) -> usize {
-        return self.video_client_addrs.remove_client(client)
+        self.video_client_addrs.remove_client(client)
     }
 
     pub fn has_clients(&self) -> bool {
-        return self.video_client_addrs.has_clients();
+        self.video_client_addrs.has_clients()
     }
 
 }

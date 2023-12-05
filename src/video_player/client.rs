@@ -27,8 +27,6 @@ pub enum RequestError {
     ActionNotPossible(String),
     #[error("Error connecting to server{0}")]
     ConnectionError(String),
-    #[error("Error caching video: {0}")]
-    CachingError(String),
 }
 
 #[derive(Debug)]
@@ -111,15 +109,15 @@ impl Client {
             .read(&mut buffer)
             .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
-        return Ok(bincode::deserialize(&buffer).expect("Error deserializing packet"));
+        Ok(bincode::deserialize(&buffer).expect("Error deserializing packet"))
     }
 
     pub fn session_id(&self) -> Option<u32> {
-        return self.server_connection.as_ref()?.session_id;
+        self.server_connection.as_ref()?.session_id
     }
 
     pub fn is_stopped(&self) -> Option<bool> {
-        return self.server_connection.as_ref()?.stop_transmission.into();
+        self.server_connection.as_ref()?.stop_transmission.into()
     }
 
     pub fn stop_transmition(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -181,19 +179,7 @@ impl Client {
 
         dbg!(&answer);
 
-        return Ok(answer);
-    }
-
-    pub fn pause(&mut self) -> Result<(), RequestError> {
-        let answer = self.make_request(RequestType::Pause)?;
-
-        if answer.succeded() {
-            self.server_connection
-                .as_mut()
-                .map(|sc| sc.stop_transmission = true);
-        }
-
-        Ok(())
+        Ok(answer)
     }
 
     pub fn setup(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -249,7 +235,7 @@ impl Client {
             ))?
             .session_id = Some(response.session_id());
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn receive_rtp_packet(&self) -> Result<RtpPacket, RequestError> {
@@ -281,7 +267,7 @@ impl Client {
 
         let buffer = &buffer[8..n];
 
-        return Ok(RtpPacket::decode(buffer));
+        Ok(RtpPacket::decode(buffer))
     }
 
     fn send_rtsp_packet(&mut self, packet: RtspRequest) -> std::io::Result<()> {
@@ -303,6 +289,6 @@ impl Client {
             .server_socket
             .read(&mut buffer)?;
 
-        return Ok(bincode::deserialize(&buffer[..n]).expect("Error deserializing packet"));
+        Ok(bincode::deserialize(&buffer[..n]).expect("Error deserializing packet"))
     }
 }

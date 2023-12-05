@@ -42,7 +42,7 @@ impl BootstraperNode {
 
         let _ = stream.write(&bincode::serialize(&answer).expect("Error serializing answer"))?;
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -66,11 +66,11 @@ impl Node for BootstraperNode {
 
             let std_node = StdNode::new(configuration.port, &neighbours);
 
-            return Ok(BootstraperNode {
+            Ok(BootstraperNode {
                 bootstraping_port: port,
                 topology,
                 std_node,
-            });
+            })
         } else {
             panic!("Expected a bootstraper node configuration");
         }
@@ -104,6 +104,6 @@ impl Node for BootstraperNode {
     }
 
     fn neighbours(&self) -> &[super::neighbour::Neighbour] {
-        return &self.std_node.neighbours();
+        return self.std_node.neighbours();
     }
 }
