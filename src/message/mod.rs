@@ -10,7 +10,7 @@ pub trait Message<T>: std::fmt::Debug + Clone + Serialize + for<'de> Deserialize
     fn id(&self) -> u32;
     fn payload(&self) -> Option<&T>;
     fn check_id(&self, message: Self) -> bool {
-        return self.id() == message.id();
+        self.id() == message.id()
     }
 }
 
@@ -25,6 +25,6 @@ pub enum Status {
 
 impl Status {
     pub fn is_ok(&self) -> bool {
-        return self == &Self::Ok;
+        self == &Self::Ok
     }
 }

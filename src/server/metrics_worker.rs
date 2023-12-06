@@ -1,56 +1,68 @@
 use std::{
+    collections::HashMap,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    path::Path,
+    sync::{Arc, Mutex},
 };
 
 use crate::message::metrics::{MetricsRequest, MetricsResponse};
 
+use super::server_worker::streaming_worker::transmission_worker::TransmissionChannel;
+
 #[derive(Debug)]
-pub struct MetricsWorker {
+pub struct MetricsWorker<'a> {
     metrics_listener: TcpListener,
     streaming_port: u16,
     videos_available: Vec<String>,
+    video_workers: &'a Mutex<HashMap<String, Arc<TransmissionChannel>>>,
 }
 
-impl MetricsWorker {
+impl<'a> MetricsWorker<'a> {
     pub fn new(
         streaming_port: u16,
         metrics_listener: TcpListener,
         videos_available: Vec<String>,
+        video_workers: &'a Mutex<HashMap<String, Arc<TransmissionChannel>>>,
     ) -> Self {
         Self {
+            video_workers,
             streaming_port,
             metrics_listener,
             videos_available,
         }
     }
 
-    fn handle_client(&self, mut stream: TcpStream) {
+    fn handle_client(&self, mut stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
         loop {
             let mut buffer = [0; 1024];
 
-            stream.read(&mut buffer).unwrap();
+            let n = stream.read(&mut buffer)?;
+            dbg!(&stream);
 
-            let metrics_request: MetricsRequest = bincode::deserialize(&buffer).unwrap();
+            let metrics_request: MetricsRequest = bincode::deserialize(&buffer[..n])?;
 
             let video_file = metrics_request.video_file();
 
-            let video_found = self
-                .videos_available
-                .iter()
-                .any(|video| video == video_file);
+            let video_found = Path::new(video_file).exists();
+            let lock_guard = self.video_workers.lock().expect("Error aquiring the lock");
+            let already_streaming = lock_guard.contains_key(video_file);
+            let nr_videos_already_streaming = lock_guard.len();
+            drop(lock_guard);
 
             let metrics_response = MetricsResponse::new(
                 video_found,
-                false,
+                already_streaming,
                 self.videos_available.len(),
-                0,
+                nr_videos_already_streaming,
                 self.streaming_port,
             );
 
-            let metrics_response = bincode::serialize(&metrics_response).unwrap();
+            let metrics_response = bincode::serialize(&metrics_response)?;
+            dbg!(&metrics_response);
 
-            stream.write(&metrics_response).unwrap();
+            let n = stream.write(&metrics_response)?;
+            dbg!(n);
         }
     }
 
@@ -58,10 +70,14 @@ impl MetricsWorker {
         std::thread::scope(|s| {
             for stream in self.metrics_listener.incoming() {
                 let stream = stream.unwrap();
-                
+
                 dbg!("New client connected to metrics socket");
 
-                s.spawn(move || self.handle_client(stream));
+                s.spawn(move || {
+                    if let Err(error) = self.handle_client(stream) {
+                        println!("Error processing the request: {:?}", error);
+                    }
+                });
             }
         });
     }

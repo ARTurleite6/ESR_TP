@@ -1,12 +1,12 @@
 use std::{
     fs::File,
     io::{Read, Seek},
-    path::Path,
 };
 
 use crate::message::rtp::RtpPacketBuilder;
 
 const PACKET_TYPE: u8 = 26;
+const VIDEOS_FOULDER: &str = "videos";
 
 #[derive(Debug)]
 pub struct VideoStream {
@@ -16,17 +16,22 @@ pub struct VideoStream {
 }
 
 impl VideoStream {
-    pub fn new<P: AsRef<Path>>(file_name: P) -> std::io::Result<Self> {
-        let file = File::open(file_name)?;
+    pub fn new(file_name: &str) -> std::io::Result<Self> {
+        let file = File::open(format!("{}/{}", VIDEOS_FOULDER, file_name))?;
 
         let metadata = file.metadata()?;
         let file_size = metadata.len();
 
-        return Ok(Self {
+        Ok(Self {
             file,
             frame_num: 0,
             file_size,
-        });
+        })
+    }
+
+    pub fn file_exists(file_name: &str) -> bool {
+        let path = format!("{}/{}", VIDEOS_FOULDER, file_name);
+        std::path::Path::new(&path).exists()
     }
 
     pub fn receive_next_packet(&mut self) -> std::io::Result<Vec<u8>> {
@@ -46,38 +51,20 @@ impl VideoStream {
         let mut encoded = size_encoded;
         encoded.extend(encode);
 
-        return Ok(encoded);
+        Ok(encoded)
     }
 
-    pub fn receive_next_packet(&mut self) -> std::io::Result<Vec<u8>> {
-        let data = self.next_frame()?;
-        let frame_number = self.frame_num();
-
-        let packet = RtpPacketBuilder::new(&data, PACKET_TYPE)
-            .sequence_number(frame_number as u16)
-            .build();
-
-        let encode = packet.transmit_data();
-
-        let size = encode.len() as u64;
-
-        let size_encoded = bincode::serialize(&size).expect("Error serializing size");
-
-        let mut encoded = size_encoded;
-        encoded.extend(encode);
-
-        return Ok(encoded);
-    }
-
-    fn loop_file(&mut self) {
-        let current_position = self.file.seek(std::io::SeekFrom::Current(0)).unwrap();
+    fn loop_file(&mut self) -> std::io::Result<()> {
+        let current_position = self.file.stream_position()?;
         if current_position == self.file_size {
-            self.file.seek(std::io::SeekFrom::Start(0)).unwrap();
+            self.file.seek(std::io::SeekFrom::Start(0))?;
         }
+
+        Ok(())
     }
 
     pub fn next_frame(&mut self) -> std::io::Result<Vec<u8>> {
-        self.loop_file();
+        self.loop_file()?;
 
         let mut buffer = [0; 5];
         self.file.read_exact(&mut buffer)?;
@@ -92,10 +79,10 @@ impl VideoStream {
 
         self.frame_num += 1;
 
-        return Ok(buffer);
+        Ok(buffer)
     }
 
     pub fn frame_num(&self) -> u32 {
-        return self.frame_num;
+        self.frame_num
     }
 }

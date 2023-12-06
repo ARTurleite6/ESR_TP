@@ -9,7 +9,7 @@ use crate::{
     video::{packet_source::PacketSource, video_stream::VideoStream},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct ClientInfo {
     address: SocketAddr,
     session_id: u32,
@@ -24,7 +24,7 @@ impl ClientInfo {
     }
 
     pub fn session_id(&self) -> u32 {
-        return self.session_id;
+        self.session_id
     }
 
     pub fn address(&self) -> &SocketAddr {
@@ -47,7 +47,7 @@ impl TransmissionChannel {
         clients: Vec<ClientInfo>,
     ) -> Self {
         Self {
-            server_stream: server_stream.into(),
+            server_stream,
             udp_socket,
             clients,
             worker: None,
@@ -64,7 +64,7 @@ impl TransmissionChannel {
 
         self.worker = Some(worker);
 
-        let worker_clone = Arc::clone(&self.worker.as_ref().unwrap());
+        let worker_clone = Arc::clone(self.worker.as_ref().unwrap());
 
         std::thread::spawn(move || {
             worker_clone.run();
@@ -72,45 +72,58 @@ impl TransmissionChannel {
     }
 
     pub fn send_server_request(&mut self, request: RtspRequest) -> std::io::Result<Vec<u8>> {
-        self.server_stream
+        let _ = self
+            .server_stream
             .write(&bincode::serialize(&request).unwrap())?;
 
         let mut buffer = [0; 1024];
 
         let n = self.server_stream.read(&mut buffer)?;
         let answer: Vec<u8> = buffer[..n].to_vec();
-        return Ok(answer);
+        Ok(answer)
     }
 
     pub fn add_client_to_room(&mut self, client: ClientInfo) {
         self.clients.push(client);
     }
 
+    pub fn get_client_info(&self, address: SocketAddr) -> Option<ClientInfo> {
+        return self
+            .clients
+            .iter()
+            .find(|cl| cl.address == address).copied();
+    }
+
     pub fn remove_client_to_room(&mut self, client: ClientInfo) {
         self.clients.retain(|cl| cl != &client);
+
+        self.remove_client_as_playable(client);
     }
 
     pub fn add_client_as_playable(&mut self, client: ClientInfo) {
-        let address = client.address;
-        self.clients.push(client);
-        self.worker.as_ref().unwrap().add_client(address);
+        self.worker.as_ref().unwrap().add_client(client.address);
     }
 
     pub fn remove_client_as_playable(&mut self, client: ClientInfo) {
-        self.clients.retain(|client| client != client);
-        self.worker.as_ref().unwrap().remove_client(client.address);
+        let worker = self.worker.as_ref().unwrap();
+
+        worker.remove_client(client.address);
+
+        if !worker.has_clients() {
+            self.worker = None;
+        }
     }
 
     pub fn has_clients(&self) -> bool {
-        return !self.clients.is_empty();
+        !self.clients.is_empty()
     }
 
     pub fn has_worker(&self) -> bool {
-        return self.worker.is_some();
+        self.worker.is_some()
     }
 
     pub fn rtp_port(&self) -> u16 {
-        return self.udp_socket.local_addr().unwrap().port();
+        self.udp_socket.local_addr().unwrap().port()
     }
 }
 
@@ -152,6 +165,11 @@ impl TransmissionChannelWorker {
         lock.retain(|&x| x != client);
     }
 
+    pub fn has_clients(&self) -> bool {
+        let lock = self.addresses.lock().unwrap();
+        !lock.is_empty()
+    }
+
     pub fn run(&self) {
         println!("Listening on {}", self.socket.local_addr().unwrap());
         loop {
@@ -164,7 +182,6 @@ impl TransmissionChannelWorker {
 
             if let Ok(packet) = packet {
                 let addresses = self.addresses.lock().unwrap();
-                dbg!(&addresses);
                 for client in addresses.iter() {
                     self.socket.send_to(&packet, client).unwrap();
                 }

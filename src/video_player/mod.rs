@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod client;
 mod video_widgets;
 
@@ -17,8 +15,8 @@ use crate::message;
 use self::client::{Client, RequestError};
 use self::video_widgets::VideoWidgets;
 
-const CACHE_DIRECTORY: &'static str = "tmp";
-const CACHE_EXTENSION: &'static str = "Mjpeg";
+const CACHE_DIRECTORY: &str = "tmp";
+const CACHE_EXTENSION: &str = "Mjpeg";
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -41,9 +39,8 @@ trait VideoPlayerComponent {
 pub struct VideoPlayer;
 
 #[derive(Debug, Clone, Copy)]
-enum Message {
+enum VideoPlayerAction {
     Play,
-    Pause,
     Setup,
     Teardown,
 }
@@ -51,7 +48,7 @@ enum Message {
 impl VideoPlayer {
     pub fn run(init: Args) {
         let app = Application::builder()
-            .application_id(&format!("video.streamer/{}", init.rtp_port))
+            .application_id(format!("video.streamer/{}", init.rtp_port))
             .build();
 
         Self::setup(&app, init);
@@ -59,19 +56,23 @@ impl VideoPlayer {
         app.run_with_args::<&str>(&[]);
     }
 
-    fn update(message: &Message, client: &Arc<RwLock<Client>>, widgets: &Rc<VideoWidgets>) {
+    fn update(
+        message: &VideoPlayerAction,
+        client: &Arc<RwLock<Client>>,
+        widgets: &Rc<VideoWidgets>,
+    ) {
         match message {
-            Message::Setup => {
+            VideoPlayerAction::Setup => {
                 widgets.set_label_text("State: Ready");
-                let mut lock = client.write().unwrap();
-                let result = lock.setup();
-                dbg!(&result);
-                if result.is_err() {
+                let mut lock = client
+                    .write()
+                    .expect("Error acquiring the client's writing lock");
+                if let Err(error) = lock.setup() {
                     dbg!("Error setting up");
-                    widgets.set_label_text("State: Idle (Error setting up)");
+                    widgets.set_label_text(&format!("State: Idle ({})", error));
                 }
             }
-            Message::Play => {
+            VideoPlayerAction::Play => {
                 widgets.set_label_text("State: Playing");
                 if VideoPlayer::play(client, widgets).is_err() {
                     dbg!("Error playing video");
@@ -79,51 +80,62 @@ impl VideoPlayer {
                 }
                 dbg!("Play");
             }
-            Message::Teardown => {
-                if client.write().unwrap().stop_transmition().is_err() {
+            VideoPlayerAction::Teardown => {
+                if client
+                    .write()
+                    .expect("Error acquiring the client's writing lock")
+                    .stop_transmition()
+                    .is_err()
+                {
                     dbg!("Error stopping transmission");
                     widgets.set_label_text("State: Error stopping transmission");
                 } else {
                     widgets.set_label_text("State: Idle");
                 }
             }
-            _ => todo!(),
         }
     }
 
-    fn store_file_cache(video: &[u8], session_id: u32) -> String {
+    fn store_file_cache(video: &[u8], session_id: u32) -> std::io::Result<String> {
         let path = format!("{}/{}.{}", CACHE_DIRECTORY, session_id, CACHE_EXTENSION);
 
-        let mut file = std::fs::File::create(&path).expect("Error creating file");
+        let mut file = std::fs::File::create(&path)?;
 
-        file.write_all(video).expect("Error writing to cache");
+        file.write_all(video)?;
 
-        return path;
+        Ok(path)
     }
 
     fn register_callback(
         client: &Arc<RwLock<Client>>,
         widgets: &Rc<VideoWidgets>,
-        message: Message,
+        message: VideoPlayerAction,
         button: &gtk::Button,
     ) {
-        let client_clone = Arc::clone(&client);
-        let widgets_clone = Rc::clone(&widgets);
+        let client_clone = Arc::clone(client);
+        let widgets_clone = Rc::clone(widgets);
         button.connect_clicked(move |_| {
             Self::update(&message, &client_clone, &widgets_clone);
         });
     }
 
-    fn register_callbacks(
-        client: Arc<RwLock<Client>>,
-        widgets: Rc<VideoWidgets>,
-    ) {
-        VideoPlayer::register_callback(&client, &widgets, Message::Setup, widgets.setup_button());
-        VideoPlayer::register_callback(&client, &widgets, Message::Play, widgets.play_button());
+    fn register_callbacks(client: Arc<RwLock<Client>>, widgets: Rc<VideoWidgets>) {
         VideoPlayer::register_callback(
             &client,
             &widgets,
-            Message::Teardown,
+            VideoPlayerAction::Setup,
+            widgets.setup_button(),
+        );
+        VideoPlayer::register_callback(
+            &client,
+            &widgets,
+            VideoPlayerAction::Play,
+            widgets.play_button(),
+        );
+        VideoPlayer::register_callback(
+            &client,
+            &widgets,
+            VideoPlayerAction::Teardown,
             widgets.teardown_button(),
         );
     }
@@ -151,44 +163,57 @@ impl VideoPlayer {
         client: &Arc<RwLock<Client>>,
         video_widget: &Rc<VideoWidgets>,
     ) -> Result<(), RequestError> {
-        let mut lock = client.write().unwrap();
+        let mut lock = client.write().expect("Failed to acquire lock");
 
         let answer = lock.make_request(message::rtsp::RequestType::Play)?;
+        if !answer.succeded() {
+            return Err(RequestError::FailedRequest);
+        }
 
-        let session_id = lock.session_id();
+        let session_id = lock.session_id().ok_or(RequestError::FailedRequest)?;
         drop(lock);
 
         let (tx, rx) = MainContext::channel(gtk::glib::Priority::DEFAULT);
 
-        let client_clone = Arc::clone(&client);
+        let client_clone = Arc::clone(client);
         thread::spawn(move || loop {
             let lock = client_clone.read().unwrap();
 
-            if lock.is_stopped() {
-                tx.send(None)
-                    .expect("Error sending path to another channel");
+            if lock
+                .is_stopped()
+                .expect("Expected client to be connected to server")
+            {
+                if let Err(error) = tx.send(None) {
+                    println!("Error sending path to another channel {}", error);
+                }
                 break;
             }
 
-            let packet = lock.receive_rtp_packet();
+            let packet = lock.receive_rtp_packet().expect("Error receiving packet");
             drop(lock);
 
             let data = packet.payload();
 
-            let path = VideoPlayer::store_file_cache(&data, session_id);
+            let path = VideoPlayer::store_file_cache(data, session_id);
             dbg!(&path);
-
-            tx.send(Some(path))
-                .expect("Error sending path to another channel");
+            match path {
+                Ok(path) => {
+                    tx.send(Some(path))
+                        .expect("Error sending path to another channel");
+                }
+                Err(error) => {
+                    println!("Error storing file {}", error)
+                }
+            }
         });
 
-        let video_widgets_clone = Rc::clone(&video_widget);
+        let video_widgets_clone = Rc::clone(video_widget);
         rx.attach(None, move |path| {
             video_widgets_clone.update_image(path.as_deref());
             while gtk::glib::MainContext::default().iteration(false) {}
-            return gtk::glib::ControlFlow::Continue;
+            gtk::glib::ControlFlow::Continue
         });
 
-        return Ok(());
+        Ok(())
     }
 }

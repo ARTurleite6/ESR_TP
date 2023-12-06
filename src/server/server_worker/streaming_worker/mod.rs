@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     net::{IpAddr, TcpStream, UdpSocket},
-    path::Path,
     sync::{Arc, Mutex},
 };
 
@@ -73,8 +72,7 @@ impl<'a> StreamingWorker<'a> {
 
             dbg!(&video_info);
 
-            let rtp_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").expect("Error binding socket"));
-
+            let rtp_socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
 
             let worker = Arc::new(TransmissionChannel::new(rtp_socket, video_info));
             dbg!(&worker);
@@ -90,11 +88,7 @@ impl<'a> StreamingWorker<'a> {
         Ok(())
     }
 
-    fn validate_file(file: &str) -> bool {
-        return Path::new(file).exists();
-    }
-
-    fn process_rtsp_request(&mut self, request: RtspRequest) {
+    fn process_rtsp_request(&mut self, request: RtspRequest) -> std::io::Result<()> {
         match request.request_type() {
             RequestType::Setup => {
                 if let ServerState::Init = self.server_state {
@@ -110,29 +104,27 @@ impl<'a> StreamingWorker<'a> {
                         session_id,
                     });
 
-                    if !Self::validate_file(request.file_request()) {
+                    if !VideoStream::file_exists(request.file_request()) {
                         let response = RtspResponse::new(
                             Status::FileNotFound,
                             request.seq_number(),
                             session_id,
                         );
 
-                        self.reply_rtsp(response);
-
                         self.client_info = None;
-                        return;
+                        self.reply_rtsp(response)?;
                     }
 
                     let response = RtspResponse::new(Status::Ok, request.seq_number(), session_id);
 
                     self.server_state = ServerState::Ready;
 
-                    self.reply_rtsp(response);
+                    self.reply_rtsp(response)?;
                 }
             }
             RequestType::Play => {
                 if let ServerState::Ready = self.server_state {
-                    self.process_play(request);
+                    self.process_play(request)?;
                 }
             }
             RequestType::Teardown => {
@@ -154,15 +146,30 @@ impl<'a> StreamingWorker<'a> {
                     lock.remove(request.file_request()).unwrap();
                 }
 
-                self.reply_rtsp(response);
+                self.reply_rtsp(response)?;
             }
-            _ => {
-                todo!()
+            RequestType::Pause => {
+                println!("Processing Pause");
+
+                let client_info = self.client_info.as_ref().unwrap();
+
+                let response =
+                    RtspResponse::new(Status::Ok, request.seq_number(), client_info.session_id);
+
+                let address = (client_info.ip_address, client_info.rtp_port);
+
+                let lock = self.video_workers.lock().unwrap();
+
+                let worker = lock.get(request.file_request()).unwrap();
+                worker.remove_client(address);
+
+                self.reply_rtsp(response)?;
             }
         }
+        Ok(())
     }
 
-    fn process_play(&mut self, request: RtspRequest) {
+    fn process_play(&mut self, request: RtspRequest) -> std::io::Result<()> {
         println!("Processing play");
         let client_info = self.client_info.as_mut().unwrap();
         let session_id = client_info.session_id;
@@ -173,19 +180,18 @@ impl<'a> StreamingWorker<'a> {
             let response =
                 RtspResponse::new(Status::ConnectionError, request.seq_number(), session_id);
 
-            self.reply_rtsp(response);
-            return;
+            return self.reply_rtsp(response);
         }
 
         let response = RtspResponse::new(Status::Ok, request.seq_number(), session_id);
 
-        self.reply_rtsp(response);
+        self.reply_rtsp(response)
     }
 
-    pub fn reply_rtsp(&mut self, response: RtspResponse) {
+    pub fn reply_rtsp(&mut self, response: RtspResponse) -> std::io::Result<()> {
         let response = bincode::serialize(&response).expect("Error serializing packet");
 
-        self.rtsp_socket.write_all(&response).unwrap();
+        self.rtsp_socket.write_all(&response)
     }
 
     pub fn run(&mut self) {
@@ -198,7 +204,14 @@ impl<'a> StreamingWorker<'a> {
 
             let request = bincode::deserialize(&buffer).expect("Error deserializing packet");
 
-            self.process_rtsp_request(request);
+            match self.process_rtsp_request(request) {
+                Ok(_) => {
+                    println!("Request processed successfully")
+                }
+                Err(error) => {
+                    println!("Error processing request {}", error);
+                }
+            }
         }
     }
 }

@@ -1,5 +1,7 @@
 use std::{
     collections::HashMap,
+    fs,
+    path::Path,
     sync::{Arc, Mutex},
 };
 
@@ -21,42 +23,52 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(metrics_port: u16, streaming_port: u16, files_available: Vec<String>) -> Self {
-        //verify that the files are available
-        //for file in &files_available {
-        //    if !std::path::Path::new(file).exists() {
-        //        panic!("File {} does not exist", file);
-        //    }
-        //}
+    pub fn new(metrics_port: u16, streaming_port: u16) -> std::io::Result<Self> {
+        let files_available = Self::get_files_available()?;
 
-        Self {
+        dbg!(&files_available);
+
+        Ok(Self {
             metrics_port,
             streaming_port,
             files_available,
             ..Default::default()
-        }
+        })
+    }
+
+    fn get_files_available() -> std::io::Result<Vec<String>> {
+        Ok(fs::read_dir(Path::new("videos"))?
+            .map(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .into_string()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect())
     }
 
     pub fn run(&self) {
         std::thread::scope(|s| {
-            let streaming_listener = std::net::TcpListener::bind(("0.0.0.0", self.streaming_port)).unwrap();
+            let streaming_listener =
+                std::net::TcpListener::bind(("0.0.0.0", self.streaming_port)).unwrap();
             println!("Streaming socket listening on port {}", self.streaming_port);
 
-            let metrics_listener = std::net::TcpListener::bind(("0.0.0.0", self.metrics_port)).unwrap();
+            let metrics_listener =
+                std::net::TcpListener::bind(("0.0.0.0", self.metrics_port)).unwrap();
             println!("Metrics socket listening on port {}", self.metrics_port);
 
             let streaming_port = streaming_listener.local_addr().unwrap().port();
 
-            let metrics_worker = metrics_worker::MetricsWorker::new(
-                streaming_port,
-                metrics_listener,
-                self
-                    .files_available
-                    .clone()
-            );
-
             s.spawn(move || {
-                metrics_worker.run();
+                metrics_worker::MetricsWorker::new(
+                    streaming_port,
+                    metrics_listener,
+                    self.files_available.clone(),
+                    &self.video_workers,
+                )
+                .run();
             });
 
             for stream in streaming_listener.incoming() {
