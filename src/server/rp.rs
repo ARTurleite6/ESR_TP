@@ -59,7 +59,7 @@ impl RP {
         let server_connections: Arc<Vec<Mutex<TcpStream>>> = Arc::new(
             server_connections
                 .into_iter()
-                .map(|stream| Mutex::new(stream))
+                .map(Mutex::new)
                 .collect(),
         );
 

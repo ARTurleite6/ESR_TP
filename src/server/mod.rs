@@ -37,7 +37,7 @@ impl Server {
     }
 
     fn get_files_available() -> std::io::Result<Vec<String>> {
-        return Ok(fs::read_dir(Path::new("videos"))?
+        Ok(fs::read_dir(Path::new("videos"))?
             .map(|entry| {
                 entry
                     .unwrap()
@@ -46,7 +46,7 @@ impl Server {
                     .unwrap()
                     .to_string()
             })
-            .collect());
+            .collect())
     }
 
     pub fn run(&self) {

@@ -185,13 +185,13 @@ impl<'a> StreamingWorker<'a> {
 
         let response = RtspResponse::new(Status::Ok, request.seq_number(), session_id);
 
-        return self.reply_rtsp(response);
+        self.reply_rtsp(response)
     }
 
     pub fn reply_rtsp(&mut self, response: RtspResponse) -> std::io::Result<()> {
         let response = bincode::serialize(&response).expect("Error serializing packet");
 
-        return self.rtsp_socket.write_all(&response);
+        self.rtsp_socket.write_all(&response)
     }
 
     pub fn run(&mut self) {
