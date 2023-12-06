@@ -187,6 +187,7 @@ impl Client {
             .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
         let answer = self.find_video(&udp_socket)?;
+        dbg!(&answer);
 
         if !answer.status().is_ok() {
             return Err(RequestError::FailedRequest.into());
@@ -223,6 +224,7 @@ impl Client {
 
         let response = self.receive_rtsp_packet()?;
 
+        dbg!(&response);
         if !response.succeded() {
             self.server_connection = None;
             return Err(RequestError::FailedRequest.into());

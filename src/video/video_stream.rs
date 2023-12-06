@@ -1,12 +1,12 @@
 use std::{
     fs::File,
     io::{Read, Seek},
-    path::Path,
 };
 
 use crate::message::rtp::RtpPacketBuilder;
 
 const PACKET_TYPE: u8 = 26;
+const VIDEOS_FOULDER: &str = "videos";
 
 #[derive(Debug)]
 pub struct VideoStream {
@@ -16,8 +16,8 @@ pub struct VideoStream {
 }
 
 impl VideoStream {
-    pub fn new<P: AsRef<Path>>(file_name: P) -> std::io::Result<Self> {
-        let file = File::open(file_name)?;
+    pub fn new(file_name: &str) -> std::io::Result<Self> {
+        let file = File::open(format!("{}/{}", VIDEOS_FOULDER, file_name))?;
 
         let metadata = file.metadata()?;
         let file_size = metadata.len();
@@ -27,6 +27,11 @@ impl VideoStream {
             frame_num: 0,
             file_size,
         })
+    }
+
+    pub fn file_exists(file_name: &str) -> bool {
+        let path = format!("{}/{}", VIDEOS_FOULDER, file_name);
+        std::path::Path::new(&path).exists()
     }
 
     pub fn receive_next_packet(&mut self) -> std::io::Result<Vec<u8>> {
@@ -49,15 +54,17 @@ impl VideoStream {
         Ok(encoded)
     }
 
-    fn loop_file(&mut self) {
-        let current_position = self.file.stream_position().unwrap();
+    fn loop_file(&mut self) -> std::io::Result<()> {
+        let current_position = self.file.stream_position()?;
         if current_position == self.file_size {
-            self.file.seek(std::io::SeekFrom::Start(0)).unwrap();
+            self.file.seek(std::io::SeekFrom::Start(0))?;
         }
+
+        Ok(())
     }
 
     pub fn next_frame(&mut self) -> std::io::Result<Vec<u8>> {
-        self.loop_file();
+        self.loop_file()?;
 
         let mut buffer = [0; 5];
         self.file.read_exact(&mut buffer)?;

@@ -67,9 +67,9 @@ impl VideoPlayer {
                 let mut lock = client
                     .write()
                     .expect("Error acquiring the client's writing lock");
-                if lock.setup().is_err() {
+                if let Err(error) = lock.setup() {
                     dbg!("Error setting up");
-                    widgets.set_label_text("State: Idle (Error setting up)");
+                    widgets.set_label_text(&format!("State: Idle ({})", error));
                 }
             }
             VideoPlayerAction::Play => {
