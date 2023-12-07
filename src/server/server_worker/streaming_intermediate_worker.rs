@@ -37,7 +37,6 @@ impl StreamingWorker<'_> {
             }
 
             let message: RtspRequest = bincode::deserialize(&buffer[..n]).unwrap();
-            dbg!(&message);
             let answer = match message.request_type() {
                 RequestType::Setup => self.process_setup(&mut stream, message),
                 RequestType::Play => self.process_play(&mut stream, message),
@@ -59,8 +58,6 @@ impl StreamingWorker<'_> {
                 stream.peer_addr().unwrap().ip(),
                 request.port_rtp(),
             ));
-
-            dbg!(&client_info);
 
             if let Some(client_info) = client_info {
                 transmission_worker.remove_client_as_playable(client_info);
@@ -182,8 +179,6 @@ impl StreamingWorker<'_> {
             request.seq_number(),
         );
 
-        dbg!(&address);
-
         if transmission_worker.has_worker() {
             transmission_worker.add_client_as_playable(address);
 
@@ -226,6 +221,10 @@ impl StreamingWorker<'_> {
                 SocketAddr::new(client_stream.peer_addr().unwrap().ip(), request.port_rtp()),
                 session_id,
             ));
+            println!(
+                "Client added to session as I am already streaming with session_id as: {}",
+                session_id
+            );
 
             let answer = RtspResponse::new(
                 crate::message::rtsp::Status::Ok,
@@ -251,6 +250,11 @@ impl StreamingWorker<'_> {
                 port,
                 request.servers_to_connect().clone(),
             );
+            println!(
+                "Contacting server: {:?},  with {:?}",
+                server_to_contact.address(),
+                request_server
+            );
 
             let answer = channel.send_server_request(request_server).unwrap();
 
@@ -267,6 +271,7 @@ impl StreamingWorker<'_> {
 
             channel.add_client_to_room(client_info);
 
+            println!("Channel created {:?}", channel);
             lock_guard.insert(request.file_request().to_string(), channel);
 
             answer

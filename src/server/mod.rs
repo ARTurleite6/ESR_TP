@@ -26,8 +26,6 @@ impl Server {
     pub fn new(metrics_port: u16, streaming_port: u16) -> std::io::Result<Self> {
         let files_available = Self::get_files_available()?;
 
-        dbg!(&files_available);
-
         Ok(Self {
             metrics_port,
             streaming_port,

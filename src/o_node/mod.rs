@@ -1,10 +1,7 @@
-#![allow(dead_code)]
-
 pub mod bootstraper_node;
 pub mod config;
 mod errors;
 pub mod neighbour;
-mod query_worker;
 pub mod std_node;
 
 use std::fmt::Debug;

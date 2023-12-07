@@ -70,12 +70,9 @@ impl<'a> StreamingWorker<'a> {
 
             let video_info = Arc::new(VideoStreamInfo::new(stream, addresses));
 
-            dbg!(&video_info);
-
             let rtp_socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
 
             let worker = Arc::new(TransmissionChannel::new(rtp_socket, video_info));
-            dbg!(&worker);
 
             let worker_clone = Arc::clone(&worker);
 
@@ -142,7 +139,7 @@ impl<'a> StreamingWorker<'a> {
                 let worker = lock.get(request.file_request()).unwrap();
 
                 if worker.remove_client(address) == 0 {
-                    dbg!("Removing worker");
+                    println!("Removing worker");
                     lock.remove(request.file_request()).unwrap();
                 }
 

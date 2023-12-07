@@ -24,7 +24,6 @@ impl RtpPacket {
         let mut data = Vec::with_capacity(self.header.len() + self.payload.len());
         data.extend(&self.header);
         data.extend(&self.payload);
-        dbg!(self.payload.len());
         data
     }
 

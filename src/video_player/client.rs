@@ -52,7 +52,6 @@ impl VideoPlayerComponent for Client {
     type Init = Args;
 
     fn from_init(init: &Self::Init) -> Self {
-        dbg!(init);
         Self::new(
             init.server_name.clone(),
             init.server_port,
@@ -91,25 +90,21 @@ impl Client {
             self.servers_to_connect.clone(),
         );
 
-        dbg!(&request);
-
         let request = bincode::serialize(&request).expect("Error serializing packet");
 
         let tcp_socket = &mut server_connection.server_socket;
 
-        let n = tcp_socket
+        let _ = tcp_socket
             .write(&request)
             .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
-        dbg!(n);
-
         let mut buffer = [0; 1024];
 
-        tcp_socket
+        let n = tcp_socket
             .read(&mut buffer)
             .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
-        Ok(bincode::deserialize(&buffer).expect("Error deserializing packet"))
+        Ok(bincode::deserialize(&buffer[..n]).expect("Error deserializing packet"))
     }
 
     pub fn session_id(&self) -> Option<u32> {
@@ -165,19 +160,15 @@ impl Client {
 
         let query_encode = bincode::serialize(&query).unwrap();
 
-        dbg!(&(self.server_name.as_str(), self.server_port));
-        let n = udp_socket
+        let _ = udp_socket
             .send_to(&query_encode, (self.server_name.as_str(), self.server_port))
             .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
-        dbg!(n);
 
         let mut buffer = [0; 1024];
         let n = udp_socket
             .recv(&mut buffer)
             .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
         let answer = bincode::deserialize(&buffer[..n]).unwrap();
-
-        dbg!(&answer);
 
         Ok(answer)
     }
@@ -187,7 +178,7 @@ impl Client {
             .map_err(|err| RequestError::ConnectionError(err.to_string()))?;
 
         let answer = self.find_video(&udp_socket)?;
-        dbg!(&answer);
+        println!("Answer found {:?}", answer);
 
         if !answer.status().is_ok() {
             return Err(RequestError::FailedRequest.into());
@@ -197,7 +188,6 @@ impl Client {
             "Expected payload on the answer".to_string(),
         ))?;
         self.servers_to_connect = servers_to_connect.clone();
-        dbg!(&self.servers_to_connect);
 
         let seq_number = 1;
 
@@ -209,6 +199,7 @@ impl Client {
             servers_to_connect.clone(),
         );
 
+        println!("Message to server {:?}", message);
         let server_socket = TcpStream::connect((self.server_name.as_str(), self.server_port))
             .map_err(|_| RequestError::FailedRequest)?;
 
@@ -221,10 +212,9 @@ impl Client {
         });
 
         self.send_rtsp_packet(message)?;
-
         let response = self.receive_rtsp_packet()?;
+        println!("Response from server {:?}", response);
 
-        dbg!(&response);
         if !response.succeded() {
             self.server_connection = None;
             return Err(RequestError::FailedRequest.into());

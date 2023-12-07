@@ -1,5 +1,5 @@
 use std::{
-    net::{UdpSocket, IpAddr},
+    net::{IpAddr, UdpSocket},
     sync::Arc,
     time::Duration,
 };
@@ -25,7 +25,7 @@ impl TransmissionChannel {
             std::thread::sleep(Duration::from_secs_f64(0.05));
 
             if !self.video_client_addrs.has_clients() {
-                dbg!("Sai do programa");
+                println!("Worker stopped running: There are no more clients");
                 break;
             }
 
@@ -47,5 +47,4 @@ impl TransmissionChannel {
     pub fn has_clients(&self) -> bool {
         self.video_client_addrs.has_clients()
     }
-
 }

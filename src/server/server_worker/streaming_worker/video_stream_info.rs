@@ -24,9 +24,7 @@ impl VideoStreamInfo {
         let packet = video_lock.receive_next_packet()?;
 
         for client in self.clients.lock().unwrap().iter() {
-            dbg!(client);
-            let n = rtp_socket.send_to(&packet, client).unwrap();
-            dbg!(n);
+            let _ = rtp_socket.send_to(&packet, client).unwrap();
         }
 
         Ok(())

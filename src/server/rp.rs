@@ -3,7 +3,7 @@ use std::{
     io::{Read, Write},
     net::{TcpStream, UdpSocket},
     sync::{Arc, Mutex},
-    time::Instant,
+    time::Duration,
 };
 
 use clap::Parser;
@@ -56,12 +56,8 @@ impl RP {
             udp_socket.local_addr().unwrap().port()
         );
 
-        let server_connections: Arc<Vec<Mutex<TcpStream>>> = Arc::new(
-            server_connections
-                .into_iter()
-                .map(Mutex::new)
-                .collect(),
-        );
+        let server_connections: Arc<Vec<Mutex<TcpStream>>> =
+            Arc::new(server_connections.into_iter().map(Mutex::new).collect());
 
         std::thread::scope(|s| loop {
             let (n, addr) = udp_socket.recv_from(&mut buffer).unwrap();
@@ -96,54 +92,69 @@ impl RP {
                     let request = bincode::serialize(&request).expect("Error serializing packet");
 
                     for server in server_connections.iter() {
-                        dbg!(&server);
                         let mut server = server.lock().unwrap();
-                        let n = server.write(&request).unwrap();
-                        dbg!(n);
+                        if server.write(&request).is_err() {
+                            continue;
+                        }
                     }
 
-                    let now = Instant::now();
                     let mut answers = Vec::new();
                     let mut count = 0;
-                    dbg!(server_connections.len());
-                    while count < server_connections.len() && now.elapsed().as_secs() < 5 {
+                    while count < server_connections.len() {
                         let mut buffer = [0; 1024];
                         let mut server = server_connections[count].lock().unwrap();
-                        let n = server.read(&mut buffer).unwrap();
+                        if server
+                            .set_read_timeout(Some(Duration::from_secs(1)))
+                            .is_err()
+                        {
+                            continue;
+                        }
+                        let n = server.read(&mut buffer);
+                        if n.is_err() {
+                            continue;
+                        }
+                        let n = n.unwrap();
+                        let _ = server.set_read_timeout(None);
                         if n == 0 {
                             continue;
                         }
                         let response: MetricsResponse =
                             bincode::deserialize(&buffer).expect("Error deserializing packet");
-                        dbg!(&response);
 
                         let neighbour = Neighbour::new_with_port(
                             server.peer_addr().unwrap().ip(),
                             response.streaming_port(),
                         );
-
                         answers.push((response, neighbour));
 
                         count += 1;
                     }
-                    println!("Answers: {:?}", &answers);
+                    let mut answers: Vec<(MetricsResponse, Neighbour)> = answers
+                        .into_iter()
+                        .filter(|server| server.0.video_found())
+                        .collect();
+                    answers.sort_by(|s1, s2| {
+                        return s2
+                            .0
+                            .metric_calculation()
+                            .partial_cmp(&s1.0.metric_calculation())
+                            .unwrap();
+                    });
 
-                    dbg!(&answers);
-                    let server_to_use = answers.into_iter().nth(0);
+                    let server_to_use = answers.into_iter().last();
 
                     let answer = if let Some(server) = server_to_use {
                         let server_to_use = server.1;
+                        println!("Server chosen to contact {:?}", server_to_use);
                         Answer::from_message(query, vec![server_to_use], Status::Ok)
                     } else {
                         Answer::from_message(query, vec![], Status::VideoNotFound)
                     };
 
+                    println!("Sending answer: {:?}", &answer);
                     let answer = bincode::serialize(&answer).expect("Error serializing packet");
 
-                    dbg!((&answer, &addr));
-
-                    let n = udp_socket.send_to(&answer, addr).unwrap();
-                    dbg!(n);
+                    let _ = udp_socket.send_to(&answer, addr).unwrap();
                 }
             });
         });

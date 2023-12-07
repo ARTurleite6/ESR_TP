@@ -68,17 +68,17 @@ impl VideoPlayer {
                     .write()
                     .expect("Error acquiring the client's writing lock");
                 if let Err(error) = lock.setup() {
-                    dbg!("Error setting up");
+                    eprintln!("Error setting up");
                     widgets.set_label_text(&format!("State: Idle ({})", error));
                 }
             }
             VideoPlayerAction::Play => {
                 widgets.set_label_text("State: Playing");
                 if VideoPlayer::play(client, widgets).is_err() {
-                    dbg!("Error playing video");
+                    eprintln!("Error playing video");
                     widgets.set_label_text("State: Idle (Error playing video)");
                 }
-                dbg!("Play");
+                println!("Play");
             }
             VideoPlayerAction::Teardown => {
                 if client
@@ -87,7 +87,7 @@ impl VideoPlayer {
                     .stop_transmition()
                     .is_err()
                 {
-                    dbg!("Error stopping transmission");
+                    eprintln!("Error stopping transmission");
                     widgets.set_label_text("State: Error stopping transmission");
                 } else {
                     widgets.set_label_text("State: Idle");
@@ -151,7 +151,6 @@ impl VideoPlayer {
 
             let widgets = Rc::new(VideoWidgets::new(&window));
             let client = Arc::new(RwLock::new(Client::from_init(&init)));
-            dbg!(&client);
 
             Self::register_callbacks(client, widgets);
 
@@ -195,7 +194,6 @@ impl VideoPlayer {
             let data = packet.payload();
 
             let path = VideoPlayer::store_file_cache(data, session_id);
-            dbg!(&path);
             match path {
                 Ok(path) => {
                     tx.send(Some(path))

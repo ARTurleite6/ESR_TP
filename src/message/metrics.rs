@@ -41,8 +41,16 @@ impl MetricsResponse {
             already_streaming,
             nr_videos_available,
             nr_videos_already_streaming,
-            streaming_port
+            streaming_port,
         }
+    }
+
+    pub fn metric_calculation(&self) -> f32 {
+        let nr_videos_available_ratio = self.nr_videos_available as f32 * 0.3;
+        let nr_videos_already_streaming_ratio = self.nr_videos_already_streaming as f32 * 0.7;
+        nr_videos_already_streaming_ratio
+            + nr_videos_available_ratio
+            + self.already_streaming as u32 as f32
     }
 
     pub fn video_found(&self) -> bool {
@@ -64,7 +72,7 @@ impl MetricsResponse {
     pub fn set_video_found(&mut self, video_found: bool) {
         self.video_found = video_found;
     }
-    
+
     pub fn streaming_port(&self) -> u16 {
         self.streaming_port
     }
