@@ -134,11 +134,11 @@ impl RP {
                         .filter(|server| server.0.video_found())
                         .collect();
                     answers.sort_by(|s1, s2| {
-                        return s2
+                        s2
                             .0
                             .metric_calculation()
                             .partial_cmp(&s1.0.metric_calculation())
-                            .unwrap();
+                            .unwrap()
                     });
 
                     let server_to_use = answers.into_iter().last();

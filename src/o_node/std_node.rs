@@ -162,7 +162,7 @@ impl StdNode {
 
         let _ = socket.send_to(&answer, addr).unwrap();
 
-        return Ok(());
+        Ok(())
     }
 }
 
