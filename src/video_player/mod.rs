@@ -10,7 +10,7 @@ use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use crate::message;
+use esr_core::message;
 
 use self::client::{Client, RequestError};
 use self::video_widgets::VideoWidgets;

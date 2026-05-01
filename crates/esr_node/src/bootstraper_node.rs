@@ -6,11 +6,12 @@ use std::{
     str::FromStr,
 };
 
-use crate::message::{answer::Answer, query::Query, Status};
+use esr_core::message::{answer::Answer, query::Query, Status};
+
+use esr_core::neighbour::Neighbour;
 
 use super::{
     config::{Configuration, NodeFunction},
-    neighbour::Neighbour,
     std_node::StdNode,
     Node, NodeCreationError,
 };
@@ -103,7 +104,7 @@ impl Node for BootstraperNode {
         Ok(())
     }
 
-    fn neighbours(&self) -> &[super::neighbour::Neighbour] {
+    fn neighbours(&self) -> &[esr_core::neighbour::Neighbour] {
         return self.std_node.neighbours();
     }
 }

@@ -7,19 +7,19 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    message::{answer::Answer, query::Query, query::QueryType, Message, Status},
-    o_node::{errors::VideoQueryError, NodeCreationError},
-    server::{
-        server_worker::streaming_intermediate_worker::StreamingWorker,
-        transmission_channel::TransmissionChannel,
-    },
-};
+use esr_core::message::{answer::Answer, query::Query, query::QueryType, Message, Status};
+
+use esr_core::neighbour::Neighbour;
 
 use super::{
     config::{Configuration, NodeFunction},
-    neighbour::Neighbour,
     Node,
+};
+use crate::{errors::VideoQueryError, NodeCreationError};
+
+use esr_server::{
+    server_worker::streaming_intermediate_worker::StreamingWorker,
+    transmission_channel::TransmissionChannel,
 };
 
 #[derive(Debug, Default)]

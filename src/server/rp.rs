@@ -8,20 +8,19 @@ use std::{
 
 use clap::Parser;
 
-use crate::{
+use esr_core::{
     message::{
         answer::Answer,
         metrics::{MetricsRequest, MetricsResponse},
         query::Query,
         Status,
     },
-    o_node::neighbour::Neighbour,
+    neighbour::Neighbour,
 };
 
-use super::{
-    server_worker::streaming_intermediate_worker::StreamingWorker,
-    transmission_channel::TransmissionChannel,
-};
+use esr_server::transmission_channel::TransmissionChannel;
+
+use esr_server::server_worker::streaming_intermediate_worker::StreamingWorker;
 
 #[derive(Debug, Parser)]
 pub struct RPArgs {
@@ -134,9 +133,7 @@ impl RP {
                         .filter(|server| server.0.video_found())
                         .collect();
                     answers.sort_by(|s1, s2| {
-                        s2
-                            .0
-                            .metric_calculation()
+                        s2.0.metric_calculation()
                             .partial_cmp(&s1.0.metric_calculation())
                             .unwrap()
                     });

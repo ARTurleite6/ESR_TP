@@ -3,7 +3,7 @@ use std::{
     sync::Mutex,
 };
 
-use crate::video::video_stream::VideoStream;
+use esr_video::video_stream::VideoStream;
 
 #[derive(Debug)]
 pub struct VideoStreamInfo {

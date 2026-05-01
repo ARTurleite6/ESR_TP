@@ -1,0 +1,11 @@
+[package]
+name = "esr_server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+esr_core.workspace = true
+esr_video.workspace = true
+
+bincode.workspace = true
+rand.workspace = true

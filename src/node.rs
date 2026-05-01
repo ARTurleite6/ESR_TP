@@ -1,5 +1,5 @@
 use clap::Parser;
-use esr_lib::o_node::{config::Configuration, create_node, NodeCreationError};
+use esr_node::{config::Configuration, create_node, NodeCreationError};
 
 fn main() -> Result<(), NodeCreationError> {
     let config = Configuration::parse();

@@ -5,7 +5,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::{
+use esr_core::{
     message::{
         self,
         answer::Answer,
@@ -14,7 +14,7 @@ use crate::{
         rtsp::{RequestType, RtspRequest, RtspResponse},
         Message,
     },
-    o_node::neighbour::Neighbour,
+    neighbour::Neighbour,
 };
 
 use super::{Args, VideoPlayerComponent};

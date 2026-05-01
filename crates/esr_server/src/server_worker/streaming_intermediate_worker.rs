@@ -5,12 +5,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use esr_core::message::rtsp::{RequestType, RtspRequest, RtspResponse};
 use rand::Rng;
 
-use crate::{
-    message::rtsp::{RequestType, RtspRequest, RtspResponse},
-    server::transmission_channel::{ClientInfo, TransmissionChannel},
-};
+use crate::transmission_channel::{ClientInfo, TransmissionChannel};
+
 #[derive(Debug)]
 pub struct StreamingWorker<'a> {
     port: u16,
@@ -21,7 +20,7 @@ impl StreamingWorker<'_> {
     pub fn new(
         port: u16,
         transmission_workers: &Mutex<HashMap<String, TransmissionChannel>>,
-    ) -> StreamingWorker {
+    ) -> StreamingWorker<'_> {
         StreamingWorker {
             port,
             transmission_workers,
@@ -76,14 +75,14 @@ impl StreamingWorker<'_> {
                 }
 
                 let answer = RtspResponse::new(
-                    crate::message::rtsp::Status::Ok,
+                    esr_core::message::rtsp::Status::Ok,
                     request.seq_number(),
                     request.seq_number(),
                 );
                 bincode::serialize(&answer).unwrap()
             } else {
                 bincode::serialize(&RtspResponse::new(
-                    crate::message::rtsp::Status::ConnectionError,
+                    esr_core::message::rtsp::Status::ConnectionError,
                     request.seq_number(),
                     request.seq_number(),
                 ))
@@ -91,7 +90,7 @@ impl StreamingWorker<'_> {
             }
         } else {
             let answer = RtspResponse::new(
-                crate::message::rtsp::Status::ConnectionError,
+                esr_core::message::rtsp::Status::ConnectionError,
                 request.seq_number(),
                 request.seq_number(),
             );
@@ -118,7 +117,7 @@ impl StreamingWorker<'_> {
 
                 if transmission_worker.has_clients() {
                     let answer = RtspResponse::new(
-                        crate::message::rtsp::Status::Ok,
+                        esr_core::message::rtsp::Status::Ok,
                         request.seq_number(),
                         request.seq_number(),
                     );
@@ -141,7 +140,7 @@ impl StreamingWorker<'_> {
                     }
 
                     bincode::serialize(&RtspResponse::new(
-                        crate::message::rtsp::Status::Ok,
+                        esr_core::message::rtsp::Status::Ok,
                         seq_number_client,
                         client_info.session_id(),
                     ))
@@ -149,7 +148,7 @@ impl StreamingWorker<'_> {
                 }
             } else {
                 bincode::serialize(&RtspResponse::new(
-                    crate::message::rtsp::Status::ConnectionError,
+                    esr_core::message::rtsp::Status::ConnectionError,
                     request.seq_number(),
                     request.seq_number(),
                 ))
@@ -157,7 +156,7 @@ impl StreamingWorker<'_> {
             }
         } else {
             let answer = RtspResponse::new(
-                crate::message::rtsp::Status::ConnectionError,
+                esr_core::message::rtsp::Status::ConnectionError,
                 request.seq_number(),
                 request.seq_number(),
             );
@@ -183,7 +182,7 @@ impl StreamingWorker<'_> {
             transmission_worker.add_client_as_playable(address);
 
             let answer = RtspResponse::new(
-                crate::message::rtsp::Status::Ok,
+                esr_core::message::rtsp::Status::Ok,
                 request.seq_number(),
                 request.seq_number(),
             );
@@ -215,7 +214,7 @@ impl StreamingWorker<'_> {
         let channel = lock_guard.get_mut(request.file_request());
 
         if let Some(channel) = channel {
-            let session_id = rand::thread_rng().gen();
+            let session_id = rand::thread_rng().r#gen();
 
             channel.add_client_to_room(ClientInfo::new(
                 SocketAddr::new(client_stream.peer_addr().unwrap().ip(), request.port_rtp()),
@@ -227,7 +226,7 @@ impl StreamingWorker<'_> {
             );
 
             let answer = RtspResponse::new(
-                crate::message::rtsp::Status::Ok,
+                esr_core::message::rtsp::Status::Ok,
                 request.seq_number(),
                 request.seq_number(),
             );

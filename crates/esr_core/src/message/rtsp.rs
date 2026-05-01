@@ -4,7 +4,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::o_node::neighbour::Neighbour;
+use crate::neighbour::Neighbour;
 
 #[derive(Error, Debug, Clone)]
 pub enum RtpParsingError {
@@ -170,11 +170,11 @@ impl RtspRequest {
     pub fn port_rtp(&self) -> u16 {
         self.port_rtp
     }
-    
+
     pub fn next_server(&mut self) -> Option<Neighbour> {
         self.servers_to_contact.pop()
     }
-    
+
     pub fn servers_to_connect(&self) -> &Vec<Neighbour> {
         &self.servers_to_contact
     }

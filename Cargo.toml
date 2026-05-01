@@ -1,3 +1,7 @@
+[workspace]
+members = ["crates/esr_core", "crates/esr_node", "crates/esr_server", "crates/esr_video"]
+resolver = "2"
+
 [package]
 name = "esr_tp"
 version = "0.1.0"
@@ -25,12 +29,29 @@ path = "src/rp_launcher.rs"
 name = "esr_lib"
 path = "src/lib.rs"
 
+[workspace.dependencies]
+esr_core.path = "crates/esr_core"
+esr_server.path = "crates/esr_server"
+esr_video.path = "crates/esr_video"
 
-[dependencies]
-bincode = "1.3.3"
-clap = { version = "4.4.6", features = ["derive"] }
-gtk = "0.18.1"
-rand = "0.8.5"
 serde = { version = "1.0.189", features = ["derive"] }
 serde_json = "1.0.107"
+rand = "0.8.5"
 thiserror = "1.0.50"
+bincode = "1.3.3"
+clap = { version = "4.4.6", features = ["derive"] }
+
+[dependencies]
+bincode.workspace = true
+clap.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+gtk = "0.18.1"
+
+esr_core.path = "crates/esr_core"
+esr_node.path = "crates/esr_node"
+esr_server.path = "crates/esr_server"
+esr_video.path = "crates/esr_video"

@@ -1,37 +1,35 @@
 use std::{
-    collections::HashMap,
+    collections::HashSet,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
-    sync::{Arc, Mutex},
+    sync::{mpsc::Receiver, RwLock},
 };
 
-use crate::{
-    message::metrics::{MetricsRequest, MetricsResponse},
-    video::video_stream::VideoStream,
-};
+use esr_server::server_worker::streaming_worker::Message;
 
-use super::server_worker::streaming_worker::transmission_worker::TransmissionChannel;
+use esr_core::message::metrics::{MetricsRequest, MetricsResponse};
+
+use esr_video::video_stream::VideoStream;
 
 #[derive(Debug)]
-pub struct MetricsWorker<'a> {
+pub struct MetricsWorker {
     metrics_listener: TcpListener,
     streaming_port: u16,
     videos_available: Vec<String>,
-    video_workers: &'a Mutex<HashMap<String, Arc<TransmissionChannel>>>,
+    video_workers: RwLock<HashSet<String>>,
 }
 
-impl<'a> MetricsWorker<'a> {
+impl MetricsWorker {
     pub fn new(
         streaming_port: u16,
         metrics_listener: TcpListener,
         videos_available: Vec<String>,
-        video_workers: &'a Mutex<HashMap<String, Arc<TransmissionChannel>>>,
     ) -> Self {
         Self {
-            video_workers,
             streaming_port,
             metrics_listener,
             videos_available,
+            video_workers: Default::default(),
         }
     }
 
@@ -46,8 +44,8 @@ impl<'a> MetricsWorker<'a> {
             let video_file = metrics_request.video_file();
 
             let video_found = VideoStream::file_exists(video_file);
-            let lock_guard = self.video_workers.lock().expect("Error aquiring the lock");
-            let already_streaming = lock_guard.contains_key(video_file);
+            let lock_guard = self.video_workers.read().unwrap();
+            let already_streaming = lock_guard.contains(video_file);
             let nr_videos_already_streaming = lock_guard.len();
             drop(lock_guard);
 
@@ -65,8 +63,19 @@ impl<'a> MetricsWorker<'a> {
         }
     }
 
-    pub fn run(&self) {
+    pub fn run(&self, receiver: Receiver<Message<String>>) {
         std::thread::scope(|s| {
+            s.spawn(move || {
+                for msg in receiver {
+                    match msg {
+                        Message::Add(video) => self.video_workers.write().unwrap().insert(video),
+                        Message::Remove(video) => {
+                            self.video_workers.write().unwrap().remove(&video)
+                        }
+                    };
+                }
+            });
+
             for stream in self.metrics_listener.incoming() {
                 let stream = stream.unwrap();
 

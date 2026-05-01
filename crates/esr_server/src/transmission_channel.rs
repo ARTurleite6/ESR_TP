@@ -4,10 +4,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{
-    message::rtsp::RtspRequest,
-    video::{packet_source::PacketSource, video_stream::VideoStream},
-};
+use esr_core::message::rtsp::RtspRequest;
+
+use esr_video::{packet_source::PacketSource, video_stream::VideoStream};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct ClientInfo {
@@ -91,7 +90,8 @@ impl TransmissionChannel {
         return self
             .clients
             .iter()
-            .find(|cl| cl.address == address).copied();
+            .find(|cl| cl.address == address)
+            .copied();
     }
 
     pub fn remove_client_to_room(&mut self, client: ClientInfo) {

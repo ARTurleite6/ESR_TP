@@ -1,15 +1,15 @@
 pub mod bootstraper_node;
 pub mod config;
 mod errors;
-pub mod neighbour;
 pub mod std_node;
 
+use esr_core::neighbour::Neighbour;
 use std::fmt::Debug;
 
 use config::{Configuration, NodeFunction};
 use thiserror::Error;
 
-use self::{bootstraper_node::BootstraperNode, neighbour::Neighbour, std_node::StdNode};
+use self::{bootstraper_node::BootstraperNode, std_node::StdNode};
 
 #[derive(Debug, Error)]
 pub enum NodeCreationError {

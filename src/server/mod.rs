@@ -1,25 +1,15 @@
-use std::{
-    collections::HashMap,
-    fs,
-    path::Path,
-    sync::{Arc, Mutex},
-};
+use std::{fs, path::Path, sync::mpsc};
 
 mod metrics_worker;
 pub mod rp;
-pub mod server_worker;
-pub mod transmission_channel;
 
-use crate::server::server_worker::streaming_worker::StreamingWorker;
-
-use self::server_worker::streaming_worker::transmission_worker::TransmissionChannel;
+use esr_server::server_worker::streaming_worker::StreamingWorker;
 
 #[derive(Debug, Default)]
 pub struct Server {
     metrics_port: u16,
     streaming_port: u16,
     files_available: Vec<String>,
-    video_workers: Mutex<HashMap<String, Arc<TransmissionChannel>>>,
 }
 
 impl Server {
@@ -59,20 +49,22 @@ impl Server {
 
             let streaming_port = streaming_listener.local_addr().unwrap().port();
 
+            let (tx, rx) = mpsc::channel();
             s.spawn(move || {
                 metrics_worker::MetricsWorker::new(
                     streaming_port,
                     metrics_listener,
                     self.files_available.clone(),
-                    &self.video_workers,
                 )
-                .run();
+                .run(rx);
             });
 
             for stream in streaming_listener.incoming() {
                 let stream = stream.unwrap();
+
+                let tx = tx.clone();
                 s.spawn(move || {
-                    let mut worker = StreamingWorker::new(stream, &self.video_workers);
+                    let mut worker = StreamingWorker::new(stream, tx);
                     worker.run();
                 });
             }
